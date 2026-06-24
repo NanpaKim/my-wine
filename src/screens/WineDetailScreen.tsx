@@ -1,0 +1,97 @@
+/**
+ * 와인 상세 화면 — 와인 메타(품종/지역/시세)와 그 와인의 모든 시음 기록.
+ */
+
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useCallback, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import type { RootStackParamList } from '../navigation/types';
+import { getWine, listTastingsForWine } from '../db/repo';
+import type { Tasting, Wine } from '../types/wine';
+import { pairingLabel, verdictLabel } from '../ui/verdict';
+
+type Props = NativeStackScreenProps<RootStackParamList, 'WineDetail'>;
+
+function regionText(w: Wine): string {
+  const parts = [w.region.country, w.region.region, w.region.subRegion].filter(Boolean);
+  return parts.length ? parts.join(' › ') : '지역 미상';
+}
+
+function varietiesText(w: Wine): string {
+  if (w.varieties.length === 0) return '품종 미상';
+  return w.varieties
+    .map((v) => (v.percent != null ? `${v.grape} ${v.percent}%` : v.grape))
+    .join(', ');
+}
+
+export default function WineDetailScreen({ route, navigation }: Props) {
+  const { wineId } = route.params;
+  const [wine, setWine] = useState<Wine | null>(null);
+  const [tastings, setTastings] = useState<Tasting[]>([]);
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      Promise.all([getWine(wineId), listTastingsForWine(wineId)])
+        .then(([w, ts]) => { if (active) { setWine(w); setTastings(ts); } })
+        .catch((e) => console.warn('load wine detail failed', e));
+      return () => { active = false; };
+    }, [wineId]),
+  );
+
+  if (!wine) return <View style={styles.center}><Text>불러오는 중…</Text></View>;
+
+  return (
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <Text style={styles.name}>{wine.name}</Text>
+      {wine.producer ? <Text style={styles.sub}>{wine.producer}</Text> : null}
+      <Text style={styles.meta}>{varietiesText(wine)}</Text>
+      <Text style={styles.meta}>{regionText(wine)}</Text>
+      {wine.vintage ? <Text style={styles.meta}>빈티지 {wine.vintage}</Text> : null}
+      {wine.referencePrice ? (
+        <Text style={styles.meta}>
+          현지 평균가 {wine.referencePrice.avg.toLocaleString()} {wine.referencePrice.currency}{' '}
+          ({wine.referencePrice.source})
+        </Text>
+      ) : (
+        <Text style={styles.metaMuted}>현지 시세 미조회</Text>
+      )}
+
+      <Text style={styles.section}>시음 기록 ({tastings.length})</Text>
+      {tastings.map((t) => (
+        <View key={t.id} style={styles.tasting}>
+          <Text style={styles.tDate}>{t.tastedAt.slice(0, 10)}</Text>
+          <Text style={styles.tLine}>
+            {t.pricePaid.toLocaleString()} {t.currency} ·{' '}
+            {t.purchaseType === 'restaurant' ? '식당' : '소매'} · {verdictLabel(t.priceVerdict)}
+          </Text>
+          {t.foodPairing ? <Text style={styles.tLine}>🍽 {t.foodPairing} · 페어링 {pairingLabel(t.pairingRating)}</Text> : null}
+          {t.tasteRating != null ? <Text style={styles.tLine}>맛 {t.tasteRating}/5 · 가성비 {t.valueRating ?? '-'}/5</Text> : null}
+          {t.notes ? <Text style={styles.tNote}>{t.notes}</Text> : null}
+        </View>
+      ))}
+
+      <Pressable style={styles.btn} onPress={() => navigation.navigate('AddTasting', { wineId })}>
+        <Text style={styles.btnText}>＋ 이 와인 기록 추가</Text>
+      </Pressable>
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#fff' },
+  content: { padding: 20, gap: 6 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  name: { fontSize: 22, fontWeight: '800', color: '#3d1422' },
+  sub: { fontSize: 15, color: '#7b2d44' },
+  meta: { fontSize: 14, color: '#444' },
+  metaMuted: { fontSize: 14, color: '#aaa' },
+  section: { marginTop: 18, fontSize: 16, fontWeight: '700', color: '#3d1422' },
+  tasting: { marginTop: 10, padding: 12, borderRadius: 10, backgroundColor: '#f5f0f2', gap: 3 },
+  tDate: { fontSize: 12, color: '#888' },
+  tLine: { fontSize: 14, color: '#333' },
+  tNote: { fontSize: 13, color: '#666', fontStyle: 'italic' },
+  btn: { marginTop: 22, backgroundColor: '#7b2d44', paddingVertical: 13, borderRadius: 24, alignItems: 'center' },
+  btnText: { color: '#fff', fontWeight: '700' },
+});
