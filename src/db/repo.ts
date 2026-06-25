@@ -135,6 +135,23 @@ export async function listWines(): Promise<Wine[]> {
   return rows.map(rowToWine);
 }
 
+/** 와인 메타 정보 수정(이름/생산자/빈티지/품종/지역/라벨). */
+export async function updateWine(wine: Wine): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `UPDATE wines SET
+       name = ?, producer = ?, vintage = ?, varieties_json = ?, region_json = ?, label_image_uri = ?
+     WHERE id = ?`,
+    wine.name,
+    wine.producer,
+    wine.vintage,
+    JSON.stringify(wine.varieties),
+    JSON.stringify(wine.region),
+    wine.labelImageUri,
+    wine.id,
+  );
+}
+
 /** 와인 삭제. ON DELETE CASCADE 로 딸린 시음 기록도 함께 지워진다. */
 export async function deleteWine(id: string): Promise<void> {
   const db = await getDb();

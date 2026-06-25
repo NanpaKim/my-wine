@@ -7,6 +7,7 @@ import HomeScreen from './src/screens/HomeScreen';
 import CaptureScreen from './src/screens/CaptureScreen';
 import WineDetailScreen from './src/screens/WineDetailScreen';
 import AddTastingScreen from './src/screens/AddTastingScreen';
+import EditWineScreen from './src/screens/EditWineScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -25,6 +26,7 @@ export default function App() {
           <Stack.Screen name="Capture" component={CaptureScreen} options={{ title: '라벨 촬영' }} />
           <Stack.Screen name="WineDetail" component={WineDetailScreen} options={{ title: '와인 상세' }} />
           <Stack.Screen name="AddTasting" component={AddTastingScreen} options={{ title: '기록 추가' }} />
+          <Stack.Screen name="EditWine" component={EditWineScreen} options={{ title: '와인 정보 수정' }} />
         </Stack.Navigator>
       </NavigationContainer>
       <StatusBar style="light" />

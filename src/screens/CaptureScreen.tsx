@@ -16,6 +16,7 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import type { RootStackParamList } from '../navigation/types';
 import { insertWine, newId } from '../db/repo';
 import { saveLabelPhoto } from '../services/photo';
+import { parseGrapes } from '../logic/wineForm';
 import type { Wine } from '../types/wine';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Capture'>;
@@ -32,6 +33,9 @@ export default function CaptureScreen({ navigation }: Props) {
   const [name, setName] = useState('');
   const [producer, setProducer] = useState('');
   const [vintage, setVintage] = useState('');
+  const [country, setCountry] = useState('');
+  const [region, setRegion] = useState('');
+  const [grapes, setGrapes] = useState('');
 
   async function takePhoto() {
     if (!cameraRef.current || busy) return;
@@ -63,8 +67,8 @@ export default function CaptureScreen({ navigation }: Props) {
       name: name.trim() || '새 와인',
       producer: producer.trim() || null,
       vintage: vintage.trim() ? Number(vintage.trim()) : null,
-      varieties: [],
-      region: { country: '', region: null, subRegion: null },
+      varieties: parseGrapes(grapes),
+      region: { country: country.trim(), region: region.trim() || null, subRegion: null },
       labelImageUri,
       referencePrice: null,
       createdAt: new Date().toISOString(),
@@ -98,6 +102,12 @@ export default function CaptureScreen({ navigation }: Props) {
         <TextInput style={styles.input} value={producer} onChangeText={setProducer} placeholder="예: Château Margaux" />
         <Text style={styles.label}>빈티지 (선택)</Text>
         <TextInput style={styles.input} value={vintage} onChangeText={setVintage} keyboardType="numeric" placeholder="예: 2015" />
+        <Text style={styles.label}>국가 (선택)</Text>
+        <TextInput style={styles.input} value={country} onChangeText={setCountry} placeholder="예: 프랑스" />
+        <Text style={styles.label}>지역 (선택)</Text>
+        <TextInput style={styles.input} value={region} onChangeText={setRegion} placeholder="예: 보르도" />
+        <Text style={styles.label}>품종 (선택, 쉼표로 구분)</Text>
+        <TextInput style={styles.input} value={grapes} onChangeText={setGrapes} placeholder="예: Merlot, Cabernet Sauvignon" />
 
         <Pressable style={styles.primary} onPress={createAndContinue} disabled={busy}>
           <Text style={styles.primaryText}>{busy ? '저장 중…' : '이 와인 기록 시작'}</Text>

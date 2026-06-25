@@ -109,6 +109,9 @@ export default function WineDetailScreen({ route, navigation }: Props) {
       <Text style={styles.meta}>{varietiesText(wine)}</Text>
       <Text style={styles.meta}>{regionText(wine)}</Text>
       {wine.vintage ? <Text style={styles.meta}>빈티지 {wine.vintage}</Text> : null}
+      <Pressable style={styles.editWine} onPress={() => navigation.navigate('EditWine', { wineId })}>
+        <Text style={styles.editWineText}>와인 정보 수정</Text>
+      </Pressable>
       {wine.referencePrice ? (
         <Text style={styles.meta}>
           현지 평균가 {wine.referencePrice.avg.toLocaleString()} {wine.referencePrice.currency}{' '}
@@ -173,6 +176,8 @@ const styles = StyleSheet.create({
   lookupBtn: { marginTop: 8, alignSelf: 'flex-start', backgroundColor: '#efe3e8', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 16 },
   lookupBtnDisabled: { opacity: 0.5 },
   lookupText: { color: '#7b2d44', fontWeight: '700', fontSize: 13 },
+  editWine: { marginTop: 6, alignSelf: 'flex-start', paddingVertical: 4 },
+  editWineText: { color: '#7b2d44', fontWeight: '700', fontSize: 13 },
   section: { marginTop: 18, fontSize: 16, fontWeight: '700', color: '#3d1422' },
   tasting: { marginTop: 10, padding: 12, borderRadius: 10, backgroundColor: '#f5f0f2', gap: 3 },
   tHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
