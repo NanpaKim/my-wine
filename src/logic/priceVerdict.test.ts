@@ -77,4 +77,52 @@ describe('judgePrice', () => {
       expect(r.ratio).toBe(5);
     });
   });
+
+  describe('통화 처리', () => {
+    it('통화 미지정이면 기존처럼 숫자 비교(하위호환)', () => {
+      const r = judgePrice({ purchaseType: 'retail', pricePaid: 40000, referenceAvg: 40000 });
+      expect(r.verdict).toBe('fair');
+      expect(r.reason).toBe('ok');
+    });
+
+    it('같은 통화면 정상 판정', () => {
+      const r = judgePrice({
+        purchaseType: 'retail', pricePaid: 40000, paidCurrency: 'KRW',
+        referenceAvg: 40000, referenceCurrency: 'KRW',
+      });
+      expect(r.verdict).toBe('fair');
+      expect(r.reason).toBe('ok');
+    });
+
+    it('통화 다른데 환율 없으면 unknown(currency-mismatch)', () => {
+      // 시세 30 EUR, 결제 50000 KRW — 그냥 비교하면 "엄청 비쌈"으로 오판
+      const r = judgePrice({
+        purchaseType: 'retail', pricePaid: 50000, paidCurrency: 'KRW',
+        referenceAvg: 30, referenceCurrency: 'EUR',
+      });
+      expect(r.verdict).toBe('unknown');
+      expect(r.reason).toBe('currency-mismatch');
+      expect(r.fairRange).toBeNull();
+    });
+
+    it('통화 다르면 fxRate로 환산해 판정', () => {
+      // 시세 30 EUR × 1450 = 43500 KRW (적정 34800~52200), 결제 45000 KRW → fair
+      const r = judgePrice({
+        purchaseType: 'retail', pricePaid: 45000, paidCurrency: 'KRW',
+        referenceAvg: 30, referenceCurrency: 'EUR', fxRate: 1450,
+      });
+      expect(r.verdict).toBe('fair');
+      expect(r.reason).toBe('ok');
+      expect(r.fairRange).toEqual([34800, 52200]);
+    });
+
+    it('환산 후에도 비싸면 expensive', () => {
+      // 시세 30 EUR × 1450 = 43500 KRW (적정 상한 52200), 결제 100000 KRW → expensive
+      const r = judgePrice({
+        purchaseType: 'retail', pricePaid: 100000, paidCurrency: 'KRW',
+        referenceAvg: 30, referenceCurrency: 'EUR', fxRate: 1450,
+      });
+      expect(r.verdict).toBe('expensive');
+    });
+  });
 });

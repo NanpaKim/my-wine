@@ -44,10 +44,16 @@ export default function AddTastingScreen({ route, navigation }: Props) {
     const pricePaid = Number(price);
     if (!Number.isFinite(pricePaid) || pricePaid <= 0) return;
 
+    // 통화를 명시적으로 넘긴다. 현재는 결제 통화 입력 UI가 없어 시세 통화와
+    // 같다고 가정한다(그래서 항상 환산 불필요). TODO: 결제 통화 선택 UI가 생기면
+    // paidCurrency 를 그 값으로 바꾸고, 다르면 fxRate(환율)를 함께 전달할 것.
+    const refCurrency = wine?.referencePrice?.currency ?? 'KRW';
     const { verdict } = judgePrice({
       purchaseType,
       pricePaid,
+      paidCurrency: refCurrency,
       referenceAvg: wine?.referencePrice?.avg ?? null,
+      referenceCurrency: wine?.referencePrice?.currency ?? null,
     });
 
     const t: Tasting = {
