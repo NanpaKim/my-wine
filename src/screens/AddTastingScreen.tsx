@@ -83,7 +83,13 @@ export default function AddTastingScreen({ route, navigation }: Props) {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
+      automaticallyAdjustKeyboardInsets // 키보드가 입력칸 가리지 않게 자동 인셋(iOS)
+    >
       <Text style={styles.label}>구입처</Text>
       <View style={styles.row}>
         {(['retail', 'restaurant'] as PurchaseType[]).map((pt) => (
@@ -135,7 +141,7 @@ export default function AddTastingScreen({ route, navigation }: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
-  content: { padding: 20, gap: 8 },
+  content: { padding: 20, gap: 8, paddingBottom: 60 }, // 키보드 위로 스크롤 여유
   label: { marginTop: 10, fontSize: 14, fontWeight: '700', color: '#3d1422' },
   input: { borderWidth: 1, borderColor: '#d8c8ce', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15 },
   multiline: { minHeight: 70, textAlignVertical: 'top' },
