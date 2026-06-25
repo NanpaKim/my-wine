@@ -10,7 +10,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { RootStackParamList } from '../navigation/types';
-import { getWine, insertTasting, newId } from '../db/repo';
+import { getTasting, getWine, insertTasting, newId, updateTasting } from '../db/repo';
 import { judgePrice } from '../logic/priceVerdict';
 import { getFxRate } from '../services/fx';
 import { getDeviceCurrency } from '../services/locale';
@@ -25,8 +25,11 @@ const PAIRINGS: { key: Rating3; label: string }[] = [
 ];
 
 export default function AddTastingScreen({ route, navigation }: Props) {
-  const { wineId } = route.params;
+  const { wineId, tastingId } = route.params;
+  const isEdit = !!tastingId;
   const [wine, setWine] = useState<Wine | null>(null);
+  // 수정 모드: 기존 기록의 불변 필드(id·생성시각) 보존용.
+  const [editing, setEditing] = useState<Tasting | null>(null);
 
   const [purchaseType, setPurchaseType] = useState<PurchaseType>('retail');
   const [price, setPrice] = useState('');
@@ -41,6 +44,29 @@ export default function AddTastingScreen({ route, navigation }: Props) {
   useEffect(() => {
     getWine(wineId).then(setWine).catch((e) => console.warn('getWine failed', e));
   }, [wineId]);
+
+  // 수정 모드면 기존 기록을 불러와 입력칸을 채운다.
+  useEffect(() => {
+    if (!tastingId) return;
+    getTasting(tastingId)
+      .then((t) => {
+        if (!t) return;
+        setEditing(t);
+        setPurchaseType(t.purchaseType);
+        setPrice(String(t.pricePaid));
+        setFood(t.foodPairing ?? '');
+        setPairing(t.pairingRating);
+        setTaste(t.tasteRating != null ? String(t.tasteRating) : '');
+        setValue(t.valueRating != null ? String(t.valueRating) : '');
+        setNotes(t.notes ?? '');
+        setDate(t.tastedAt.slice(0, 10));
+      })
+      .catch((e) => console.warn('getTasting failed', e));
+  }, [tastingId]);
+
+  useEffect(() => {
+    navigation.setOptions({ title: isEdit ? '기록 수정' : '기록 추가' });
+  }, [isEdit, navigation]);
 
   async function save() {
     const pricePaid = Number(price);
@@ -64,7 +90,7 @@ export default function AddTastingScreen({ route, navigation }: Props) {
     });
 
     const t: Tasting = {
-      id: newId(),
+      id: editing?.id ?? newId(),
       wineId,
       tastedAt: new Date(`${date}T12:00:00`).toISOString(),
       purchaseType,
@@ -76,9 +102,13 @@ export default function AddTastingScreen({ route, navigation }: Props) {
       valueRating: value ? Number(value) : null,
       priceVerdict: verdict,
       notes: notes.trim() || null,
-      createdAt: new Date().toISOString(),
+      createdAt: editing?.createdAt ?? new Date().toISOString(),
     };
-    await insertTasting(t);
+    if (isEdit) {
+      await updateTasting(t);
+    } else {
+      await insertTasting(t);
+    }
     navigation.replace('WineDetail', { wineId });
   }
 
@@ -133,7 +163,7 @@ export default function AddTastingScreen({ route, navigation }: Props) {
       <TextInput style={[styles.input, styles.multiline]} value={notes} onChangeText={setNotes} multiline placeholder="자유롭게…" />
 
       <Pressable style={styles.save} onPress={save}>
-        <Text style={styles.saveText}>저장</Text>
+        <Text style={styles.saveText}>{isEdit ? '수정 저장' : '저장'}</Text>
       </Pressable>
     </ScrollView>
   );

@@ -66,6 +66,13 @@ export default function HomeScreen({ navigation }: Props) {
                 </Text>
                 {item.foodPairing ? <Text style={styles.food}>🍽 {item.foodPairing}</Text> : null}
               </Pressable>
+              <Pressable
+                hitSlop={8}
+                onPress={() => navigation.navigate('AddTasting', { wineId: item.wineId, tastingId: item.id })}
+                style={styles.delBtn}
+              >
+                <Text style={styles.editText}>수정</Text>
+              </Pressable>
               <Pressable hitSlop={8} onPress={() => confirmDelete(item.id)} style={styles.delBtn}>
                 <Text style={styles.delText}>삭제</Text>
               </Pressable>
@@ -89,6 +96,7 @@ const styles = StyleSheet.create({
   card: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 12, backgroundColor: '#f5f0f2' },
   cardBody: { flex: 1, gap: 4 },
   delBtn: { paddingLeft: 12, paddingVertical: 4 },
+  editText: { color: '#7b2d44', fontWeight: '700', fontSize: 13 },
   delText: { color: '#b0457a', fontWeight: '700', fontSize: 13 },
   date: { fontSize: 12, color: '#888' },
   price: { fontSize: 15, fontWeight: '600', color: '#5a1f33' },

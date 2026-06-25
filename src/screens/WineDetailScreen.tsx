@@ -130,9 +130,14 @@ export default function WineDetailScreen({ route, navigation }: Props) {
         <View key={t.id} style={styles.tasting}>
           <View style={styles.tHeader}>
             <Text style={styles.tDate}>{t.tastedAt.slice(0, 10)}</Text>
-            <Pressable hitSlop={8} onPress={() => confirmDeleteTasting(t.id)}>
-              <Text style={styles.tDelete}>삭제</Text>
-            </Pressable>
+            <View style={styles.tActions}>
+              <Pressable hitSlop={8} onPress={() => navigation.navigate('AddTasting', { wineId, tastingId: t.id })}>
+                <Text style={styles.tEdit}>수정</Text>
+              </Pressable>
+              <Pressable hitSlop={8} onPress={() => confirmDeleteTasting(t.id)}>
+                <Text style={styles.tDelete}>삭제</Text>
+              </Pressable>
+            </View>
           </View>
           <Text style={styles.tLine}>
             {t.pricePaid.toLocaleString()} {t.currency} ·{' '}
@@ -169,6 +174,8 @@ const styles = StyleSheet.create({
   section: { marginTop: 18, fontSize: 16, fontWeight: '700', color: '#3d1422' },
   tasting: { marginTop: 10, padding: 12, borderRadius: 10, backgroundColor: '#f5f0f2', gap: 3 },
   tHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  tActions: { flexDirection: 'row', gap: 14 },
+  tEdit: { fontSize: 12, color: '#7b2d44', fontWeight: '700' },
   tDelete: { fontSize: 12, color: '#b0457a', fontWeight: '700' },
   tDate: { fontSize: 12, color: '#888' },
   tLine: { fontSize: 14, color: '#333' },

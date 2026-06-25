@@ -166,6 +166,35 @@ export async function insertTasting(t: Tasting): Promise<void> {
   );
 }
 
+/** 시음 기록 한 건 조회(수정 화면 프리필용). */
+export async function getTasting(id: string): Promise<Tasting | null> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<TastingRow>('SELECT * FROM tastings WHERE id = ?', id);
+  return row ? rowToTasting(row) : null;
+}
+
+/** 시음 기록 수정(편집 가능한 필드만 갱신; id·wine_id·created_at 유지). */
+export async function updateTasting(t: Tasting): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `UPDATE tastings SET
+       tasted_at = ?, purchase_type = ?, price_paid = ?, currency = ?, food_pairing = ?,
+       pairing_rating = ?, taste_rating = ?, value_rating = ?, price_verdict = ?, notes = ?
+     WHERE id = ?`,
+    t.tastedAt,
+    t.purchaseType,
+    t.pricePaid,
+    t.currency,
+    t.foodPairing,
+    t.pairingRating,
+    t.tasteRating,
+    t.valueRating,
+    t.priceVerdict,
+    t.notes,
+    t.id,
+  );
+}
+
 /** 시음 기록 한 건 삭제. */
 export async function deleteTasting(id: string): Promise<void> {
   const db = await getDb();
