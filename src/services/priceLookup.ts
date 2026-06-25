@@ -11,6 +11,7 @@
  */
 
 import type { ReferencePrice } from '../types/wine';
+import { parseVivinoResponse } from '../logic/vivinoParse';
 
 /** 와인을 시세 DB에서 식별하기 위한 질의 정보(OCR/사용자 입력에서 구성). */
 export interface PriceQuery {
@@ -36,37 +37,7 @@ export const wineSearcherProvider: PriceProvider = {
   },
 };
 
-/**
- * Vivino 검색 응답에서 와인 카드를 가리키는 최소 타입. 비공식 엔드포인트라
- * 실제 필드가 더 많고/다를 수 있어 모두 optional + unknown으로 방어한다.
- */
-interface VivinoVintageCard {
-  vintage?: {
-    statistics?: { wine_yearly_buy_count?: number };
-  };
-  price?: { amount?: number; currency?: string };
-  prices?: { amount?: number; currency?: string }[];
-}
-
-interface VivinoExploreResponse {
-  explore_vintage?: {
-    matches?: VivinoVintageCard[];
-  };
-}
-
-/** 카드 하나에서 시도 가능한 가격 후보를 모두 모아 본다(스키마 추정이라 여러 경로 시도). */
-function extractPriceCandidates(card: VivinoVintageCard): { amount: number; currency: string }[] {
-  const candidates: { amount: number; currency: string }[] = [];
-  if (card.price?.amount != null && card.price.currency) {
-    candidates.push({ amount: card.price.amount, currency: card.price.currency });
-  }
-  for (const p of card.prices ?? []) {
-    if (p.amount != null && p.currency) candidates.push({ amount: p.amount, currency: p.currency });
-  }
-  return candidates;
-}
-
-/** 2순위: Vivino 비공식 검색 엔드포인트 직접 호출. 응답 스키마는 추정이라 방어적으로 파싱. */
+/** 2순위: Vivino 비공식 검색 엔드포인트 직접 호출. 파싱은 logic/vivinoParse.ts(순수 함수)에 위임. */
 export const vivinoProvider: PriceProvider = {
   source: 'vivino',
   async fetch(query: PriceQuery): Promise<ReferencePrice | null> {
@@ -85,27 +56,27 @@ export const vivinoProvider: PriceProvider = {
             'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
         },
       });
-      if (!res.ok) return null;
+      if (!res.ok) {
+        console.warn(`[vivino] HTTP ${res.status} for query: ${q}`);
+        return null;
+      }
 
-      const data = (await res.json()) as VivinoExploreResponse;
-      const matches = data.explore_vintage?.matches ?? [];
-      const allPrices = matches.flatMap(extractPriceCandidates);
-      if (allPrices.length === 0) return null;
+      const data: unknown = await res.json();
+      const parsed = parseVivinoResponse(data);
+      if (!parsed) {
+        // 응답은 왔지만 가격 경로를 못 맞춤. 실기기 디버깅용으로 실제 응답을 남긴다.
+        // (vivino.com 접근이 막힌 개발 환경에서는 스키마를 검증할 수 없으므로,
+        //  실패 시 이 로그를 보고 logic/vivinoParse.ts의 경로를 맞추면 된다.)
+        console.warn(
+          `[vivino] price parse miss for "${q}". raw response: ` +
+            JSON.stringify(data).slice(0, 2000),
+        );
+        return null;
+      }
 
-      const currency = allPrices[0].currency;
-      const amounts = allPrices.filter((p) => p.currency === currency).map((p) => p.amount);
-      if (amounts.length === 0) return null;
-
-      const avg = amounts.reduce((sum, a) => sum + a, 0) / amounts.length;
-      return {
-        min: Math.min(...amounts),
-        avg,
-        max: Math.max(...amounts),
-        currency,
-        source: 'vivino',
-        fetchedAt: new Date().toISOString(),
-      };
-    } catch {
+      return { ...parsed, source: 'vivino', fetchedAt: new Date().toISOString() };
+    } catch (e) {
+      console.warn(`[vivino] fetch failed for "${q}":`, e);
       return null;
     } finally {
       clearTimeout(timeout);
