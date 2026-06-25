@@ -36,12 +36,80 @@ export const wineSearcherProvider: PriceProvider = {
   },
 };
 
-/** 2순위: Vivino 비공식 스크래핑(소형 백엔드 경유). 연동 전까지 스텁. */
+/**
+ * Vivino 검색 응답에서 와인 카드를 가리키는 최소 타입. 비공식 엔드포인트라
+ * 실제 필드가 더 많고/다를 수 있어 모두 optional + unknown으로 방어한다.
+ */
+interface VivinoVintageCard {
+  vintage?: {
+    statistics?: { wine_yearly_buy_count?: number };
+  };
+  price?: { amount?: number; currency?: string };
+  prices?: { amount?: number; currency?: string }[];
+}
+
+interface VivinoExploreResponse {
+  explore_vintage?: {
+    matches?: VivinoVintageCard[];
+  };
+}
+
+/** 카드 하나에서 시도 가능한 가격 후보를 모두 모아 본다(스키마 추정이라 여러 경로 시도). */
+function extractPriceCandidates(card: VivinoVintageCard): { amount: number; currency: string }[] {
+  const candidates: { amount: number; currency: string }[] = [];
+  if (card.price?.amount != null && card.price.currency) {
+    candidates.push({ amount: card.price.amount, currency: card.price.currency });
+  }
+  for (const p of card.prices ?? []) {
+    if (p.amount != null && p.currency) candidates.push({ amount: p.amount, currency: p.currency });
+  }
+  return candidates;
+}
+
+/** 2순위: Vivino 비공식 검색 엔드포인트 직접 호출. 응답 스키마는 추정이라 방어적으로 파싱. */
 export const vivinoProvider: PriceProvider = {
   source: 'vivino',
-  async fetch(_query: PriceQuery): Promise<ReferencePrice | null> {
-    // TODO: Vivino 스크래핑 백엔드 연동. DESIGN.md §2, §6.
-    return null;
+  async fetch(query: PriceQuery): Promise<ReferencePrice | null> {
+    const q = [query.producer, query.name, query.vintage].filter(Boolean).join(' ');
+    if (!q.trim()) return null;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    try {
+      const url = `https://www.vivino.com/api/explore/explore?q=${encodeURIComponent(q)}&page=1&per_page=5`;
+      const res = await fetch(url, {
+        signal: controller.signal,
+        headers: {
+          Accept: 'application/json',
+          'User-Agent':
+            'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+        },
+      });
+      if (!res.ok) return null;
+
+      const data = (await res.json()) as VivinoExploreResponse;
+      const matches = data.explore_vintage?.matches ?? [];
+      const allPrices = matches.flatMap(extractPriceCandidates);
+      if (allPrices.length === 0) return null;
+
+      const currency = allPrices[0].currency;
+      const amounts = allPrices.filter((p) => p.currency === currency).map((p) => p.amount);
+      if (amounts.length === 0) return null;
+
+      const avg = amounts.reduce((sum, a) => sum + a, 0) / amounts.length;
+      return {
+        min: Math.min(...amounts),
+        avg,
+        max: Math.max(...amounts),
+        currency,
+        source: 'vivino',
+        fetchedAt: new Date().toISOString(),
+      };
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timeout);
+    }
   },
 };
 

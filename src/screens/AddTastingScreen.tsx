@@ -12,7 +12,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import type { RootStackParamList } from '../navigation/types';
 import { getWine, insertTasting, newId, updateWineReferencePrice } from '../db/repo';
 import { judgePrice } from '../logic/priceVerdict';
-import { manualReferencePrice } from '../services/priceLookup';
+import { lookupPrice, manualReferencePrice } from '../services/priceLookup';
 import type { PurchaseType, Rating3, Tasting, Wine } from '../types/wine';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AddTasting'>;
@@ -26,6 +26,7 @@ const PAIRINGS: { key: Rating3; label: string }[] = [
 export default function AddTastingScreen({ route, navigation }: Props) {
   const { wineId } = route.params;
   const [wine, setWine] = useState<Wine | null>(null);
+  const [lookingUp, setLookingUp] = useState(false);
 
   const [purchaseType, setPurchaseType] = useState<PurchaseType>('retail');
   const [price, setPrice] = useState('');
@@ -41,7 +42,24 @@ export default function AddTastingScreen({ route, navigation }: Props) {
   const [currency, setCurrency] = useState('KRW');
 
   useEffect(() => {
-    getWine(wineId).then(setWine).catch((e) => console.warn('getWine failed', e));
+    let active = true;
+    getWine(wineId)
+      .then(async (w) => {
+        if (!active) return;
+        setWine(w);
+        if (w && !w.referencePrice) {
+          setLookingUp(true);
+          const found = await lookupPrice({ name: w.name, producer: w.producer, vintage: w.vintage });
+          if (!active) return;
+          if (found) {
+            await updateWineReferencePrice(wineId, found);
+            if (active) setWine({ ...w, referencePrice: found });
+          }
+          setLookingUp(false);
+        }
+      })
+      .catch((e) => console.warn('getWine failed', e));
+    return () => { active = false; };
   }, [wineId]);
 
   async function save() {
@@ -102,10 +120,16 @@ export default function AddTastingScreen({ route, navigation }: Props) {
       <Text style={styles.label}>낸 가격</Text>
       <TextInput style={styles.input} value={price} onChangeText={setPrice} keyboardType="numeric" placeholder="예: 100000" />
 
-      {wine && !wine.referencePrice && (
+      {lookingUp && (
+        <View style={styles.referenceBox}>
+          <Text style={styles.referenceHint}>현지 시세 자동 조회 중…</Text>
+        </View>
+      )}
+
+      {wine && !wine.referencePrice && !lookingUp && (
         <View style={styles.referenceBox}>
           <Text style={styles.referenceHint}>
-            현지 시세가 아직 없어요. 알고 있다면 입력하면 적정가 판정에 바로 쓰입니다(모르면 비워두세요).
+            현지 시세를 자동으로 찾지 못했어요. 알고 있다면 입력하면 적정가 판정에 바로 쓰입니다(모르면 비워두세요).
           </Text>
           <Text style={styles.label}>현지 평균 소매가</Text>
           <View style={styles.row}>
