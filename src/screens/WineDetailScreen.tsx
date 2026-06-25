@@ -10,6 +10,7 @@ import type { RootStackParamList } from '../navigation/types';
 import { deleteTasting, deleteWine, getWine, listTastingsForWine, updateWineReferencePrice } from '../db/repo';
 import { lookupPrice } from '../services/priceLookup';
 import { getDeviceCurrency } from '../services/locale';
+import { deleteLabelPhoto } from '../services/photo';
 import type { Tasting, Wine } from '../types/wine';
 import { pairingLabel, verdictLabel } from '../ui/verdict';
 
@@ -75,6 +76,7 @@ export default function WineDetailScreen({ route, navigation }: Props) {
         style: 'destructive',
         onPress: async () => {
           await deleteWine(wine.id);
+          await deleteLabelPhoto(wine.labelImageUri); // 라벨 사진 파일도 정리
           navigation.goBack();
         },
       },

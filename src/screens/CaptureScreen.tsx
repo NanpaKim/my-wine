@@ -15,6 +15,7 @@ import { useRef, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { RootStackParamList } from '../navigation/types';
 import { insertWine, newId } from '../db/repo';
+import { saveLabelPhoto } from '../services/photo';
 import type { Wine } from '../types/wine';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Capture'>;
@@ -54,14 +55,17 @@ export default function CaptureScreen({ navigation }: Props) {
   async function createAndContinue() {
     if (busy) return;
     setBusy(true);
+    const id = newId();
+    // 촬영 사진이 있으면 줄여서 영구 폴더에 저장(캐시→보관). 없으면 null.
+    const labelImageUri = photoUri ? await saveLabelPhoto(photoUri, id) : null;
     const wine: Wine = {
-      id: newId(),
+      id,
       name: name.trim() || '새 와인',
       producer: producer.trim() || null,
       vintage: vintage.trim() ? Number(vintage.trim()) : null,
       varieties: [],
       region: { country: '', region: null, subRegion: null },
-      labelImageUri: photoUri,
+      labelImageUri,
       referencePrice: null,
       createdAt: new Date().toISOString(),
     };
