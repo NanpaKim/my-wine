@@ -12,6 +12,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import type { RootStackParamList } from '../navigation/types';
 import { getWine, insertTasting, newId, updateWineReferencePrice } from '../db/repo';
 import { judgePrice } from '../logic/priceVerdict';
+import { currencyConverter } from '../services/currency';
 import { lookupPrice, manualReferencePrice } from '../services/priceLookup';
 import type { PurchaseType, Rating3, Tasting, Wine } from '../types/wine';
 
@@ -39,6 +40,8 @@ export default function AddTastingScreen({ route, navigation }: Props) {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   // 자동 시세 조회(Wine-Searcher/Vivino)가 아직 비어 있는 와인을 위한 수동 입력.
   const [manualAvg, setManualAvg] = useState('');
+  const [manualCurrency, setManualCurrency] = useState('USD');
+  // 내가 "낸 가격"(price)의 통화. referencePrice의 통화와 다를 수 있어 분리해서 관리한다.
   const [currency, setCurrency] = useState('KRW');
 
   useEffect(() => {
@@ -65,21 +68,24 @@ export default function AddTastingScreen({ route, navigation }: Props) {
   async function save() {
     const pricePaid = Number(price);
     if (!Number.isFinite(pricePaid) || pricePaid <= 0) return;
+    const paidCurrency = currency.trim().toUpperCase() || 'KRW';
 
     let referencePrice = wine?.referencePrice ?? null;
     if (!referencePrice && manualAvg.trim()) {
       const avg = Number(manualAvg);
       if (Number.isFinite(avg) && avg > 0) {
-        referencePrice = manualReferencePrice(avg, currency.trim() || 'KRW');
+        referencePrice = manualReferencePrice(avg, manualCurrency.trim() || 'USD');
         await updateWineReferencePrice(wineId, referencePrice);
       }
     }
 
-    const { verdict } = judgePrice({
-      purchaseType,
-      pricePaid,
-      referenceAvg: referencePrice?.avg ?? null,
-    });
+    // referencePrice가 다른 통화면 낸 가격의 통화로 환산해 비교한다(환산 실패 시 unknown으로 처리).
+    let referenceAvg = referencePrice?.avg ?? null;
+    if (referencePrice && referencePrice.currency.toUpperCase() !== paidCurrency) {
+      referenceAvg = await currencyConverter.convert(referencePrice.avg, referencePrice.currency, paidCurrency);
+    }
+
+    const { verdict } = judgePrice({ purchaseType, pricePaid, referenceAvg });
 
     const t: Tasting = {
       id: newId(),
@@ -87,7 +93,7 @@ export default function AddTastingScreen({ route, navigation }: Props) {
       tastedAt: new Date(`${date}T12:00:00`).toISOString(),
       purchaseType,
       pricePaid,
-      currency: referencePrice?.currency ?? (currency.trim() || 'KRW'),
+      currency: paidCurrency,
       foodPairing: food.trim() || null,
       pairingRating: pairing,
       tasteRating: taste ? Number(taste) : null,
@@ -118,11 +124,37 @@ export default function AddTastingScreen({ route, navigation }: Props) {
       </View>
 
       <Text style={styles.label}>낸 가격</Text>
-      <TextInput style={styles.input} value={price} onChangeText={setPrice} keyboardType="numeric" placeholder="예: 100000" />
+      <View style={styles.row}>
+        <TextInput
+          style={[styles.input, styles.flex1]}
+          value={price}
+          onChangeText={setPrice}
+          keyboardType="numeric"
+          placeholder="예: 100000"
+        />
+        <TextInput
+          style={[styles.input, styles.currencyInput]}
+          value={currency}
+          onChangeText={setCurrency}
+          placeholder="KRW"
+          autoCapitalize="characters"
+          maxLength={3}
+        />
+      </View>
 
       {lookingUp && (
         <View style={styles.referenceBox}>
           <Text style={styles.referenceHint}>현지 시세 자동 조회 중…</Text>
+        </View>
+      )}
+
+      {wine?.referencePrice && !lookingUp && (
+        <View style={styles.referenceBox}>
+          <Text style={styles.referenceHint}>
+            현지 시세: {wine.referencePrice.avg.toLocaleString()} {wine.referencePrice.currency}
+            {wine.referencePrice.currency.toUpperCase() !== (currency.trim().toUpperCase() || 'KRW') &&
+              ' (낸 가격 통화로 자동 환산해 비교해요)'}
+          </Text>
         </View>
       )}
 
@@ -142,9 +174,9 @@ export default function AddTastingScreen({ route, navigation }: Props) {
             />
             <TextInput
               style={[styles.input, styles.currencyInput]}
-              value={currency}
-              onChangeText={setCurrency}
-              placeholder="KRW"
+              value={manualCurrency}
+              onChangeText={setManualCurrency}
+              placeholder="USD"
               autoCapitalize="characters"
               maxLength={3}
             />
