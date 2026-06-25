@@ -135,6 +135,12 @@ export async function listWines(): Promise<Wine[]> {
   return rows.map(rowToWine);
 }
 
+/** 와인 삭제. ON DELETE CASCADE 로 딸린 시음 기록도 함께 지워진다. */
+export async function deleteWine(id: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('DELETE FROM wines WHERE id = ?', id);
+}
+
 // --- Tasting CRUD ----------------------------------------------------------
 
 export async function insertTasting(t: Tasting): Promise<void> {
@@ -158,6 +164,12 @@ export async function insertTasting(t: Tasting): Promise<void> {
     t.notes,
     t.createdAt,
   );
+}
+
+/** 시음 기록 한 건 삭제. */
+export async function deleteTasting(id: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('DELETE FROM tastings WHERE id = ?', id);
 }
 
 /** 한 와인의 모든 시음 기록(최신순). */

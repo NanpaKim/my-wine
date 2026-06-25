@@ -7,7 +7,7 @@ import { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { RootStackParamList } from '../navigation/types';
-import { getWine, listTastingsForWine, updateWineReferencePrice } from '../db/repo';
+import { deleteTasting, deleteWine, getWine, listTastingsForWine, updateWineReferencePrice } from '../db/repo';
 import { lookupPrice } from '../services/priceLookup';
 import { getDeviceCurrency } from '../services/locale';
 import type { Tasting, Wine } from '../types/wine';
@@ -66,6 +66,35 @@ export default function WineDetailScreen({ route, navigation }: Props) {
     }, [wineId]),
   );
 
+  function confirmDeleteWine() {
+    if (!wine) return;
+    Alert.alert('이 와인을 삭제할까요?', '딸린 시음 기록도 함께 삭제됩니다. 되돌릴 수 없어요.', [
+      { text: '취소', style: 'cancel' },
+      {
+        text: '삭제',
+        style: 'destructive',
+        onPress: async () => {
+          await deleteWine(wine.id);
+          navigation.goBack();
+        },
+      },
+    ]);
+  }
+
+  function confirmDeleteTasting(id: string) {
+    Alert.alert('이 기록을 삭제할까요?', '되돌릴 수 없어요.', [
+      { text: '취소', style: 'cancel' },
+      {
+        text: '삭제',
+        style: 'destructive',
+        onPress: async () => {
+          await deleteTasting(id);
+          setTastings((prev) => prev.filter((t) => t.id !== id));
+        },
+      },
+    ]);
+  }
+
   if (!wine) return <View style={styles.center}><Text>불러오는 중…</Text></View>;
 
   return (
@@ -99,7 +128,12 @@ export default function WineDetailScreen({ route, navigation }: Props) {
       <Text style={styles.section}>시음 기록 ({tastings.length})</Text>
       {tastings.map((t) => (
         <View key={t.id} style={styles.tasting}>
-          <Text style={styles.tDate}>{t.tastedAt.slice(0, 10)}</Text>
+          <View style={styles.tHeader}>
+            <Text style={styles.tDate}>{t.tastedAt.slice(0, 10)}</Text>
+            <Pressable hitSlop={8} onPress={() => confirmDeleteTasting(t.id)}>
+              <Text style={styles.tDelete}>삭제</Text>
+            </Pressable>
+          </View>
           <Text style={styles.tLine}>
             {t.pricePaid.toLocaleString()} {t.currency} ·{' '}
             {t.purchaseType === 'restaurant' ? '식당' : '소매'} · {verdictLabel(t.priceVerdict)}
@@ -112,6 +146,9 @@ export default function WineDetailScreen({ route, navigation }: Props) {
 
       <Pressable style={styles.btn} onPress={() => navigation.navigate('AddTasting', { wineId })}>
         <Text style={styles.btnText}>＋ 이 와인 기록 추가</Text>
+      </Pressable>
+      <Pressable style={styles.deleteWine} onPress={confirmDeleteWine}>
+        <Text style={styles.deleteWineText}>이 와인 삭제</Text>
       </Pressable>
     </ScrollView>
   );
@@ -131,9 +168,13 @@ const styles = StyleSheet.create({
   lookupText: { color: '#7b2d44', fontWeight: '700', fontSize: 13 },
   section: { marginTop: 18, fontSize: 16, fontWeight: '700', color: '#3d1422' },
   tasting: { marginTop: 10, padding: 12, borderRadius: 10, backgroundColor: '#f5f0f2', gap: 3 },
+  tHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  tDelete: { fontSize: 12, color: '#b0457a', fontWeight: '700' },
   tDate: { fontSize: 12, color: '#888' },
   tLine: { fontSize: 14, color: '#333' },
   tNote: { fontSize: 13, color: '#666', fontStyle: 'italic' },
   btn: { marginTop: 22, backgroundColor: '#7b2d44', paddingVertical: 13, borderRadius: 24, alignItems: 'center' },
   btnText: { color: '#fff', fontWeight: '700' },
+  deleteWine: { marginTop: 12, marginBottom: 30, paddingVertical: 12, alignItems: 'center' },
+  deleteWineText: { color: '#b0457a', fontWeight: '700' },
 });
