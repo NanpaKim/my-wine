@@ -6,9 +6,9 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { RootStackParamList } from '../navigation/types';
-import { listAllTastings } from '../db/repo';
+import { deleteTasting, listAllTastings } from '../db/repo';
 import type { Tasting } from '../types/wine';
 import { verdictLabel } from '../ui/verdict';
 
@@ -28,6 +28,20 @@ export default function HomeScreen({ navigation }: Props) {
     }, []),
   );
 
+  function confirmDelete(id: string) {
+    Alert.alert('이 기록을 삭제할까요?', '되돌릴 수 없어요.', [
+      { text: '취소', style: 'cancel' },
+      {
+        text: '삭제',
+        style: 'destructive',
+        onPress: async () => {
+          await deleteTasting(id);
+          setTastings((prev) => prev.filter((t) => t.id !== id));
+        },
+      },
+    ]);
+  }
+
   return (
     <View style={styles.container}>
       {tastings.length === 0 ? (
@@ -40,17 +54,22 @@ export default function HomeScreen({ navigation }: Props) {
           keyExtractor={(t) => t.id}
           contentContainerStyle={styles.list}
           renderItem={({ item }) => (
-            <Pressable
-              style={styles.card}
-              onPress={() => navigation.navigate('WineDetail', { wineId: item.wineId })}
-            >
-              <Text style={styles.date}>{item.tastedAt.slice(0, 10)}</Text>
-              <Text style={styles.price}>
-                {item.pricePaid.toLocaleString()} {item.currency} ·{' '}
-                {item.purchaseType === 'restaurant' ? '식당' : '소매'} · {verdictLabel(item.priceVerdict)}
-              </Text>
-              {item.foodPairing ? <Text style={styles.food}>🍽 {item.foodPairing}</Text> : null}
-            </Pressable>
+            <View style={styles.card}>
+              <Pressable
+                style={styles.cardBody}
+                onPress={() => navigation.navigate('WineDetail', { wineId: item.wineId })}
+              >
+                <Text style={styles.date}>{item.tastedAt.slice(0, 10)}</Text>
+                <Text style={styles.price}>
+                  {item.pricePaid.toLocaleString()} {item.currency} ·{' '}
+                  {item.purchaseType === 'restaurant' ? '식당' : '소매'} · {verdictLabel(item.priceVerdict)}
+                </Text>
+                {item.foodPairing ? <Text style={styles.food}>🍽 {item.foodPairing}</Text> : null}
+              </Pressable>
+              <Pressable hitSlop={8} onPress={() => confirmDelete(item.id)} style={styles.delBtn}>
+                <Text style={styles.delText}>삭제</Text>
+              </Pressable>
+            </View>
           )}
         />
       )}
@@ -67,7 +86,10 @@ const styles = StyleSheet.create({
   list: { padding: 16, gap: 12 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   emptyText: { textAlign: 'center', color: '#666', lineHeight: 22 },
-  card: { padding: 14, borderRadius: 12, backgroundColor: '#f5f0f2', gap: 4 },
+  card: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 12, backgroundColor: '#f5f0f2' },
+  cardBody: { flex: 1, gap: 4 },
+  delBtn: { paddingLeft: 12, paddingVertical: 4 },
+  delText: { color: '#b0457a', fontWeight: '700', fontSize: 13 },
   date: { fontSize: 12, color: '#888' },
   price: { fontSize: 15, fontWeight: '600', color: '#5a1f33' },
   food: { fontSize: 13, color: '#555' },
