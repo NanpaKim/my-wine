@@ -7,14 +7,16 @@
  */
 
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useState, type ReactNode } from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { RootStackParamList } from '../navigation/types';
 import { getTasting, getWine, insertTasting, newId, updateTasting } from '../db/repo';
 import { judgePrice } from '../logic/priceVerdict';
 import { getFxRate } from '../services/fx';
 import { getDeviceCurrency } from '../services/locale';
 import type { PurchaseType, Rating3, Tasting, Wine } from '../types/wine';
+import { Chip, FieldLabel, Input, PrimaryButton, ScreenBackground, StarRating } from '../ui/components';
+import { colors, spacing } from '../ui/theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AddTasting'>;
 
@@ -35,8 +37,8 @@ export default function AddTastingScreen({ route, navigation }: Props) {
   const [price, setPrice] = useState('');
   const [food, setFood] = useState('');
   const [pairing, setPairing] = useState<Rating3 | null>(null);
-  const [taste, setTaste] = useState('');
-  const [value, setValue] = useState('');
+  const [taste, setTaste] = useState<number | null>(null);
+  const [value, setValue] = useState<number | null>(null);
   const [notes, setNotes] = useState('');
   // 기본 마신 날짜 = 오늘(YYYY-MM-DD). 실제 앱에선 사진 EXIF/날짜 선택기로 대체.
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
@@ -56,8 +58,8 @@ export default function AddTastingScreen({ route, navigation }: Props) {
         setPrice(String(t.pricePaid));
         setFood(t.foodPairing ?? '');
         setPairing(t.pairingRating);
-        setTaste(t.tasteRating != null ? String(t.tasteRating) : '');
-        setValue(t.valueRating != null ? String(t.valueRating) : '');
+        setTaste(t.tasteRating);
+        setValue(t.valueRating);
         setNotes(t.notes ?? '');
         setDate(t.tastedAt.slice(0, 10));
       })
@@ -68,9 +70,11 @@ export default function AddTastingScreen({ route, navigation }: Props) {
     navigation.setOptions({ title: isEdit ? '기록 수정' : '기록 추가' });
   }, [isEdit, navigation]);
 
+  const priceNum = Number(price);
+  const canSave = Number.isFinite(priceNum) && priceNum > 0;
+
   async function save() {
-    const pricePaid = Number(price);
-    if (!Number.isFinite(pricePaid) || pricePaid <= 0) return;
+    if (!canSave) return;
 
     // 통화는 자동 처리(입력 없음): 결제 통화는 기기 로케일에서, 환율은 무료
     // API 에서 자동 조회. 시세 통화와 결제 통화가 같으면 환산 불필요.
@@ -82,7 +86,7 @@ export default function AddTastingScreen({ route, navigation }: Props) {
     }
     const { verdict } = judgePrice({
       purchaseType,
-      pricePaid,
+      pricePaid: priceNum,
       paidCurrency,
       referenceAvg: wine?.referencePrice?.avg ?? null,
       referenceCurrency: refCurrency,
@@ -94,12 +98,12 @@ export default function AddTastingScreen({ route, navigation }: Props) {
       wineId,
       tastedAt: new Date(`${date}T12:00:00`).toISOString(),
       purchaseType,
-      pricePaid,
+      pricePaid: priceNum,
       currency: paidCurrency, // 실제 결제 통화(기기 로케일)
       foodPairing: food.trim() || null,
       pairingRating: pairing,
-      tasteRating: taste ? Number(taste) : null,
-      valueRating: value ? Number(value) : null,
+      tasteRating: taste,
+      valueRating: value,
       priceVerdict: verdict,
       notes: notes.trim() || null,
       createdAt: editing?.createdAt ?? new Date().toISOString(),
@@ -113,73 +117,83 @@ export default function AddTastingScreen({ route, navigation }: Props) {
   }
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      keyboardShouldPersistTaps="handled"
-      keyboardDismissMode="on-drag"
-      automaticallyAdjustKeyboardInsets // 키보드가 입력칸 가리지 않게 자동 인셋(iOS)
-    >
-      <Text style={styles.label}>구입처</Text>
-      <View style={styles.row}>
-        {(['retail', 'restaurant'] as PurchaseType[]).map((pt) => (
-          <Pressable
-            key={pt}
-            style={[styles.chip, purchaseType === pt && styles.chipOn]}
-            onPress={() => setPurchaseType(pt)}
-          >
-            <Text style={[styles.chipText, purchaseType === pt && styles.chipTextOn]}>
-              {pt === 'retail' ? '소매점' : '식당'}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
+    <ScreenBackground>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        automaticallyAdjustKeyboardInsets // 키보드가 입력칸 가리지 않게 자동 인셋(iOS)
+      >
+        <Field label="구입처">
+          <View style={styles.row}>
+            {(['retail', 'restaurant'] as PurchaseType[]).map((pt) => (
+              <Chip
+                key={pt}
+                label={pt === 'retail' ? '소매점' : '식당'}
+                active={purchaseType === pt}
+                onPress={() => setPurchaseType(pt)}
+              />
+            ))}
+          </View>
+        </Field>
 
-      <Text style={styles.label}>낸 가격</Text>
-      <TextInput style={styles.input} value={price} onChangeText={setPrice} keyboardType="numeric" placeholder="예: 100000" />
+        <Field label="낸 가격">
+          <Input value={price} onChangeText={setPrice} keyboardType="numeric" placeholder="예: 100000" />
+        </Field>
 
-      <Text style={styles.label}>마신 날짜</Text>
-      <TextInput style={styles.input} value={date} onChangeText={setDate} placeholder="YYYY-MM-DD" />
+        <Field label="마신 날짜">
+          <Input value={date} onChangeText={setDate} placeholder="YYYY-MM-DD" />
+        </Field>
 
-      <Text style={styles.label}>함께 먹은 음식</Text>
-      <TextInput style={styles.input} value={food} onChangeText={setFood} placeholder="예: 스테이크" />
+        <Field label="함께 먹은 음식">
+          <Input value={food} onChangeText={setFood} placeholder="예: 스테이크" />
+        </Field>
 
-      <Text style={styles.label}>페어링 평가</Text>
-      <View style={styles.row}>
-        {PAIRINGS.map((p) => (
-          <Pressable key={p.key} style={[styles.chip, pairing === p.key && styles.chipOn]} onPress={() => setPairing(p.key)}>
-            <Text style={[styles.chipText, pairing === p.key && styles.chipTextOn]}>{p.label}</Text>
-          </Pressable>
-        ))}
-      </View>
+        <Field label="페어링 평가">
+          <View style={styles.row}>
+            {PAIRINGS.map((p) => (
+              <Chip key={p.key} label={p.label} active={pairing === p.key} onPress={() => setPairing(p.key)} />
+            ))}
+          </View>
+        </Field>
 
-      <Text style={styles.label}>맛 평점 (1~5)</Text>
-      <TextInput style={styles.input} value={taste} onChangeText={setTaste} keyboardType="numeric" placeholder="예: 4" />
+        <Field label="맛 평점">
+          <StarRating value={taste} onSelect={setTaste} />
+        </Field>
 
-      <Text style={styles.label}>가격 대비 가치 (1~5)</Text>
-      <TextInput style={styles.input} value={value} onChangeText={setValue} keyboardType="numeric" placeholder="예: 3" />
+        <Field label="가격 대비 가치">
+          <StarRating value={value} onSelect={setValue} color={colors.cheap} />
+        </Field>
 
-      <Text style={styles.label}>메모</Text>
-      <TextInput style={[styles.input, styles.multiline]} value={notes} onChangeText={setNotes} multiline placeholder="자유롭게…" />
+        <Field label="메모">
+          <Input value={notes} onChangeText={setNotes} multiline placeholder="향, 바디감, 함께한 자리…" />
+        </Field>
 
-      <Pressable style={styles.save} onPress={save}>
-        <Text style={styles.saveText}>{isEdit ? '수정 저장' : '저장'}</Text>
-      </Pressable>
-    </ScrollView>
+        <PrimaryButton
+          label={isEdit ? '수정 저장' : '기록 저장'}
+          onPress={save}
+          style={[styles.save, !canSave && styles.saveDisabled]}
+        />
+      </ScrollView>
+    </ScreenBackground>
+  );
+}
+
+/** 라벨 + 입력을 묶는 폼 필드 래퍼. */
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <View style={styles.field}>
+      <FieldLabel>{label}</FieldLabel>
+      {children}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  content: { padding: 20, gap: 8, paddingBottom: 60 }, // 키보드 위로 스크롤 여유
-  label: { marginTop: 10, fontSize: 14, fontWeight: '700', color: '#3d1422' },
-  input: { borderWidth: 1, borderColor: '#d8c8ce', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15 },
-  multiline: { minHeight: 70, textAlignVertical: 'top' },
-  row: { flexDirection: 'row', gap: 8 },
-  chip: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 18, backgroundColor: '#efe6e9' },
-  chipOn: { backgroundColor: '#7b2d44' },
-  chipText: { color: '#7b2d44', fontWeight: '600' },
-  chipTextOn: { color: '#fff' },
-  save: { marginTop: 22, backgroundColor: '#7b2d44', paddingVertical: 14, borderRadius: 24, alignItems: 'center' },
-  saveText: { color: '#fff', fontWeight: '800', fontSize: 16 },
+  content: { padding: spacing(5), paddingBottom: spacing(15), gap: spacing(5) },
+  field: { gap: 0 },
+  row: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2.5) },
+  save: { marginTop: spacing(2) },
+  saveDisabled: { opacity: 0.45 },
 });

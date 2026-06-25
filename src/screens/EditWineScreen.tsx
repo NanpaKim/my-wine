@@ -4,12 +4,14 @@
  */
 
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput } from 'react-native';
+import { useEffect, useState, type ReactNode } from 'react';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import type { RootStackParamList } from '../navigation/types';
 import { getWine, updateWine } from '../db/repo';
 import { grapesToString, parseGrapes } from '../logic/wineForm';
 import type { Wine } from '../types/wine';
+import { FieldLabel, Input, PrimaryButton, ScreenBackground } from '../ui/components';
+import { spacing } from '../ui/theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'EditWine'>;
 
@@ -59,32 +61,50 @@ export default function EditWineScreen({ route, navigation }: Props) {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
-      <Text style={styles.label}>와인 이름</Text>
-      <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="예: Château Margaux" />
-      <Text style={styles.label}>생산자</Text>
-      <TextInput style={styles.input} value={producer} onChangeText={setProducer} placeholder="예: Château Margaux" />
-      <Text style={styles.label}>빈티지</Text>
-      <TextInput style={styles.input} value={vintage} onChangeText={setVintage} keyboardType="numeric" placeholder="예: 2015" />
-      <Text style={styles.label}>국가</Text>
-      <TextInput style={styles.input} value={country} onChangeText={setCountry} placeholder="예: 프랑스" />
-      <Text style={styles.label}>지역 (대산지)</Text>
-      <TextInput style={styles.input} value={region} onChangeText={setRegion} placeholder="예: 보르도" />
-      <Text style={styles.label}>품종 (쉼표로 구분)</Text>
-      <TextInput style={styles.input} value={grapes} onChangeText={setGrapes} placeholder="예: Merlot, Cabernet Sauvignon" />
+    <ScreenBackground>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+      >
+        <Field label="와인 이름">
+          <Input value={name} onChangeText={setName} placeholder="예: Château Margaux" />
+        </Field>
+        <Field label="생산자">
+          <Input value={producer} onChangeText={setProducer} placeholder="예: Château Margaux" />
+        </Field>
+        <Field label="빈티지">
+          <Input value={vintage} onChangeText={setVintage} keyboardType="numeric" placeholder="예: 2015" />
+        </Field>
+        <Field label="국가">
+          <Input value={country} onChangeText={setCountry} placeholder="예: 프랑스" />
+        </Field>
+        <Field label="지역 (대산지)">
+          <Input value={region} onChangeText={setRegion} placeholder="예: 보르도" />
+        </Field>
+        <Field label="품종 (쉼표로 구분)">
+          <Input value={grapes} onChangeText={setGrapes} placeholder="예: Merlot, Cabernet Sauvignon" />
+        </Field>
 
-      <Pressable style={styles.save} onPress={save} disabled={busy}>
-        <Text style={styles.saveText}>{busy ? '저장 중…' : '저장'}</Text>
-      </Pressable>
-    </ScrollView>
+        <PrimaryButton label={busy ? '저장 중…' : '저장'} onPress={save} style={styles.save} />
+      </ScrollView>
+    </ScreenBackground>
+  );
+}
+
+/** 라벨 + 입력을 묶는 폼 필드 래퍼. */
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <View style={styles.field}>
+      <FieldLabel>{label}</FieldLabel>
+      {children}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  content: { padding: 20, gap: 8, paddingBottom: 60 },
-  label: { marginTop: 10, fontSize: 14, fontWeight: '700', color: '#3d1422' },
-  input: { borderWidth: 1, borderColor: '#d8c8ce', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15 },
-  save: { marginTop: 22, backgroundColor: '#7b2d44', paddingVertical: 14, borderRadius: 24, alignItems: 'center' },
-  saveText: { color: '#fff', fontWeight: '800', fontSize: 16 },
+  content: { padding: spacing(5), paddingBottom: spacing(15), gap: spacing(5) },
+  field: { gap: 0 },
+  save: { marginTop: spacing(2) },
 });

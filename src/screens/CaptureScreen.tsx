@@ -11,13 +11,15 @@
 
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useRef, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useRef, useState, type ReactNode } from 'react';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { RootStackParamList } from '../navigation/types';
 import { insertWine, newId } from '../db/repo';
 import { saveLabelPhoto } from '../services/photo';
 import { parseGrapes } from '../logic/wineForm';
 import type { Wine } from '../types/wine';
+import { FieldLabel, Input, PrimaryButton, ScreenBackground } from '../ui/components';
+import { colors, font, radius, spacing } from '../ui/theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Capture'>;
 
@@ -25,7 +27,7 @@ export default function CaptureScreen({ navigation }: Props) {
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
 
-  // null = 아직 촬영 전(카메라 화면). 'none' = 사진 없이 진행. 그 외 = 사진 URI.
+  // null = 아직 촬영 전(카메라 화면). 그 외 = 사진 URI.
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [reviewing, setReviewing] = useState(false); // 촬영 후 확인 단계인가
   const [busy, setBusy] = useState(false);
@@ -81,63 +83,86 @@ export default function CaptureScreen({ navigation }: Props) {
     }
   }
 
-  // 권한 로딩/거부 화면
+  // 권한 로딩 화면
   if (!permission) {
-    return <View style={styles.center}><Text>카메라 권한 확인 중…</Text></View>;
+    return (
+      <ScreenBackground style={styles.center}>
+        <Text style={styles.info}>카메라 권한 확인 중…</Text>
+      </ScreenBackground>
+    );
   }
 
   // 1) 촬영 후 확인 + 이름 입력 단계
   if (reviewing) {
     return (
-      <ScrollView style={styles.flex} contentContainerStyle={styles.review} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
-        {photoUri ? (
-          <Image source={{ uri: photoUri }} style={styles.preview} resizeMode="cover" />
-        ) : (
-          <View style={[styles.preview, styles.noPhoto]}><Text style={styles.noPhotoText}>사진 없음</Text></View>
-        )}
+      <ScreenBackground>
+        <ScrollView
+          contentContainerStyle={styles.review}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets
+        >
+          {photoUri ? (
+            <Image source={{ uri: photoUri }} style={styles.preview} resizeMode="cover" />
+          ) : (
+            <View style={[styles.preview, styles.noPhoto]}>
+              <Text style={styles.noPhotoGlyph}>🍷</Text>
+              <Text style={styles.noPhotoText}>사진 없음</Text>
+            </View>
+          )}
 
-        <Text style={styles.label}>와인 이름</Text>
-        <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="예: Château Margaux" />
-        <Text style={styles.label}>생산자 (선택)</Text>
-        <TextInput style={styles.input} value={producer} onChangeText={setProducer} placeholder="예: Château Margaux" />
-        <Text style={styles.label}>빈티지 (선택)</Text>
-        <TextInput style={styles.input} value={vintage} onChangeText={setVintage} keyboardType="numeric" placeholder="예: 2015" />
-        <Text style={styles.label}>국가 (선택)</Text>
-        <TextInput style={styles.input} value={country} onChangeText={setCountry} placeholder="예: 프랑스" />
-        <Text style={styles.label}>지역 (선택)</Text>
-        <TextInput style={styles.input} value={region} onChangeText={setRegion} placeholder="예: 보르도" />
-        <Text style={styles.label}>품종 (선택, 쉼표로 구분)</Text>
-        <TextInput style={styles.input} value={grapes} onChangeText={setGrapes} placeholder="예: Merlot, Cabernet Sauvignon" />
+          <Field label="와인 이름">
+            <Input value={name} onChangeText={setName} placeholder="예: Château Margaux" />
+          </Field>
+          <Field label="생산자 (선택)">
+            <Input value={producer} onChangeText={setProducer} placeholder="예: Château Margaux" />
+          </Field>
+          <Field label="빈티지 (선택)">
+            <Input value={vintage} onChangeText={setVintage} keyboardType="numeric" placeholder="예: 2015" />
+          </Field>
+          <Field label="국가 (선택)">
+            <Input value={country} onChangeText={setCountry} placeholder="예: 프랑스" />
+          </Field>
+          <Field label="지역 (선택)">
+            <Input value={region} onChangeText={setRegion} placeholder="예: 보르도" />
+          </Field>
+          <Field label="품종 (선택, 쉼표로 구분)">
+            <Input value={grapes} onChangeText={setGrapes} placeholder="예: Merlot, Cabernet Sauvignon" />
+          </Field>
 
-        <Pressable style={styles.primary} onPress={createAndContinue} disabled={busy}>
-          <Text style={styles.primaryText}>{busy ? '저장 중…' : '이 와인 기록 시작'}</Text>
-        </Pressable>
-        <Pressable style={styles.retake} onPress={() => { setReviewing(false); setPhotoUri(null); }}>
-          <Text style={styles.retakeText}>다시 촬영</Text>
-        </Pressable>
-      </ScrollView>
+          <PrimaryButton
+            label={busy ? '저장 중…' : '이 와인 기록 시작'}
+            onPress={createAndContinue}
+            style={styles.reviewBtn}
+          />
+          <Pressable style={styles.retake} onPress={() => { setReviewing(false); setPhotoUri(null); }}>
+            <Text style={styles.retakeText}>다시 촬영</Text>
+          </Pressable>
+        </ScrollView>
+      </ScreenBackground>
     );
   }
 
   // 2) 권한 없으면 요청
   if (!permission.granted) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.info}>라벨을 촬영하려면 카메라 권한이 필요해요.</Text>
-        <Pressable style={styles.primary} onPress={requestPermission}>
-          <Text style={styles.primaryText}>카메라 권한 허용</Text>
-        </Pressable>
-        <Pressable style={[styles.primary, styles.secondary]} onPress={skipPhoto}>
-          <Text style={styles.primaryText}>사진 없이 직접 입력</Text>
-        </Pressable>
-      </View>
+      <ScreenBackground style={styles.center}>
+        <Text style={styles.infoTitle}>카메라 권한이 필요해요</Text>
+        <Text style={styles.info}>라벨을 촬영해 와인을 기록하려면{'\n'}카메라 접근을 허용해 주세요.</Text>
+        <View style={styles.permActions}>
+          <PrimaryButton label="카메라 권한 허용" onPress={requestPermission} />
+          <PrimaryButton label="사진 없이 직접 입력" variant="outline" onPress={skipPhoto} />
+        </View>
+      </ScreenBackground>
     );
   }
 
   // 3) 카메라 미리보기 + 촬영
   return (
-    <View style={styles.flex}>
-      <CameraView ref={cameraRef} style={styles.flex} facing="back" />
+    <View style={styles.cameraFlex}>
+      <CameraView ref={cameraRef} style={styles.cameraFlex} facing="back" />
+      {/* 라벨 정렬 가이드 프레임 */}
+      <View style={styles.guide} pointerEvents="none" />
       <View style={styles.controls}>
         <Pressable style={styles.skip} onPress={skipPhoto}>
           <Text style={styles.skipText}>사진 없이</Text>
@@ -151,27 +176,56 @@ export default function CaptureScreen({ navigation }: Props) {
   );
 }
 
+/** 라벨 + 입력 래퍼. */
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <View style={styles.field}>
+      <FieldLabel>{label}</FieldLabel>
+      {children}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: '#000' },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 16, backgroundColor: '#fff' },
-  info: { textAlign: 'center', color: '#555', lineHeight: 22 },
+  center: { alignItems: 'center', justifyContent: 'center', padding: spacing(6), gap: spacing(3) },
+  infoTitle: { ...font.heading, color: colors.text },
+  info: { ...font.body, textAlign: 'center', color: colors.textMuted, lineHeight: 22 },
+  permActions: { width: '100%', gap: spacing(3), marginTop: spacing(4) },
+
+  // 카메라
+  cameraFlex: { flex: 1, backgroundColor: '#000' },
+  guide: {
+    position: 'absolute',
+    top: '18%',
+    bottom: '26%',
+    left: '12%',
+    right: '12%',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.55)',
+    borderRadius: radius.lg,
+  },
   controls: {
-    position: 'absolute', bottom: 36, left: 0, right: 0,
+    position: 'absolute', bottom: 44, left: 0, right: 0,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around',
   },
-  shutter: { width: 74, height: 74, borderRadius: 37, backgroundColor: 'rgba(255,255,255,0.3)', alignItems: 'center', justifyContent: 'center' },
+  shutter: {
+    width: 78, height: 78, borderRadius: 39,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    borderWidth: 3, borderColor: 'rgba(255,255,255,0.85)',
+    alignItems: 'center', justifyContent: 'center',
+  },
   shutterInner: { width: 60, height: 60, borderRadius: 30, backgroundColor: '#fff' },
-  skip: { width: 80, alignItems: 'center' },
-  skipText: { color: '#fff', fontWeight: '700' },
-  review: { padding: 20, gap: 8, backgroundColor: '#fff', paddingBottom: 60 },
-  preview: { width: '100%', height: 240, borderRadius: 12, backgroundColor: '#eee' },
-  noPhoto: { alignItems: 'center', justifyContent: 'center' },
-  noPhotoText: { color: '#999' },
-  label: { marginTop: 10, fontSize: 14, fontWeight: '700', color: '#3d1422' },
-  input: { borderWidth: 1, borderColor: '#d8c8ce', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15 },
-  primary: { marginTop: 18, backgroundColor: '#7b2d44', paddingVertical: 14, borderRadius: 24, alignItems: 'center' },
-  primaryText: { color: '#fff', fontWeight: '800', fontSize: 16 },
-  secondary: { backgroundColor: '#9a6b78', marginTop: 12 },
-  retake: { marginTop: 12, alignItems: 'center', paddingVertical: 8 },
-  retakeText: { color: '#7b2d44', fontWeight: '700' },
+  skip: { width: 90, alignItems: 'center' },
+  skipText: { ...font.bodyStrong, color: '#fff' },
+
+  // 확인 폼
+  review: { padding: spacing(5), paddingBottom: spacing(15), gap: spacing(5) },
+  preview: { width: '100%', height: 240, borderRadius: radius.lg, backgroundColor: colors.surface },
+  noPhoto: { alignItems: 'center', justifyContent: 'center', gap: spacing(2), borderWidth: 1, borderColor: colors.border, borderStyle: 'dashed' },
+  noPhotoGlyph: { fontSize: 40, opacity: 0.8 },
+  noPhotoText: { ...font.body, color: colors.textFaint },
+  field: { gap: 0 },
+  reviewBtn: { marginTop: spacing(2) },
+  retake: { alignItems: 'center', paddingVertical: spacing(2) },
+  retakeText: { ...font.caption, color: colors.gold },
 });

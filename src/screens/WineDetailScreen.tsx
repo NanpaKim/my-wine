@@ -12,7 +12,9 @@ import { lookupPrice } from '../services/priceLookup';
 import { getDeviceCurrency } from '../services/locale';
 import { deleteLabelPhoto } from '../services/photo';
 import type { Tasting, Wine } from '../types/wine';
-import { pairingLabel, verdictLabel } from '../ui/verdict';
+import { pairingLabel, verdictLabel, verdictTone } from '../ui/verdict';
+import { Badge, PrimaryButton, ScreenBackground, StarRating } from '../ui/components';
+import { colors, font, radius, shadow, spacing } from '../ui/theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'WineDetail'>;
 
@@ -26,6 +28,11 @@ function varietiesText(w: Wine): string {
   return w.varieties
     .map((v) => (v.percent != null ? `${v.grape} ${v.percent}%` : v.grape))
     .join(', ');
+}
+
+function formatDate(iso: string): string {
+  const [y, m, d] = iso.slice(0, 10).split('-');
+  return `${y}. ${Number(m)}. ${Number(d)}`;
 }
 
 export default function WineDetailScreen({ route, navigation }: Props) {
@@ -97,98 +104,198 @@ export default function WineDetailScreen({ route, navigation }: Props) {
     ]);
   }
 
-  if (!wine) return <View style={styles.center}><Text>불러오는 중…</Text></View>;
+  if (!wine) {
+    return (
+      <ScreenBackground style={styles.center}>
+        <Text style={styles.loading}>불러오는 중…</Text>
+      </ScreenBackground>
+    );
+  }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {wine.labelImageUri ? (
-        <Image source={{ uri: wine.labelImageUri }} style={styles.label_image} resizeMode="cover" />
-      ) : null}
-      <Text style={styles.name}>{wine.name}</Text>
-      {wine.producer ? <Text style={styles.sub}>{wine.producer}</Text> : null}
-      <Text style={styles.meta}>{varietiesText(wine)}</Text>
-      <Text style={styles.meta}>{regionText(wine)}</Text>
-      {wine.vintage ? <Text style={styles.meta}>빈티지 {wine.vintage}</Text> : null}
-      <Pressable style={styles.editWine} onPress={() => navigation.navigate('EditWine', { wineId })}>
-        <Text style={styles.editWineText}>와인 정보 수정</Text>
-      </Pressable>
-      {wine.referencePrice ? (
-        <Text style={styles.meta}>
-          현지 평균가 {wine.referencePrice.avg.toLocaleString()} {wine.referencePrice.currency}{' '}
-          ({wine.referencePrice.source})
-        </Text>
-      ) : (
-        <Text style={styles.metaMuted}>현지 시세 미조회</Text>
-      )}
-      <Pressable
-        style={[styles.lookupBtn, looking && styles.lookupBtnDisabled]}
-        onPress={lookupPriceNow}
-        disabled={looking}
-      >
-        <Text style={styles.lookupText}>
-          {looking ? '조회 중…' : wine.referencePrice ? '시세 다시 조회' : '현지 시세 조회'}
-        </Text>
-      </Pressable>
+    <ScreenBackground>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {wine.labelImageUri ? (
+          <Image source={{ uri: wine.labelImageUri }} style={styles.labelImage} resizeMode="cover" />
+        ) : null}
 
-      <Text style={styles.section}>시음 기록 ({tastings.length})</Text>
-      {tastings.map((t) => (
-        <View key={t.id} style={styles.tasting}>
-          <View style={styles.tHeader}>
-            <Text style={styles.tDate}>{t.tastedAt.slice(0, 10)}</Text>
-            <View style={styles.tActions}>
-              <Pressable hitSlop={8} onPress={() => navigation.navigate('AddTasting', { wineId, tastingId: t.id })}>
-                <Text style={styles.tEdit}>수정</Text>
-              </Pressable>
-              <Pressable hitSlop={8} onPress={() => confirmDeleteTasting(t.id)}>
-                <Text style={styles.tDelete}>삭제</Text>
-              </Pressable>
-            </View>
+        {/* 히어로 */}
+        <View style={styles.hero}>
+          <View style={styles.heroHead}>
+            <Text style={styles.name}>{wine.name}</Text>
+            <Pressable hitSlop={8} onPress={() => navigation.navigate('EditWine', { wineId })}>
+              <Text style={styles.editWine}>수정</Text>
+            </Pressable>
           </View>
-          <Text style={styles.tLine}>
-            {t.pricePaid.toLocaleString()} {t.currency} ·{' '}
-            {t.purchaseType === 'restaurant' ? '식당' : '소매'} · {verdictLabel(t.priceVerdict)}
-          </Text>
-          {t.foodPairing ? <Text style={styles.tLine}>🍽 {t.foodPairing} · 페어링 {pairingLabel(t.pairingRating)}</Text> : null}
-          {t.tasteRating != null ? <Text style={styles.tLine}>맛 {t.tasteRating}/5 · 가성비 {t.valueRating ?? '-'}/5</Text> : null}
-          {t.notes ? <Text style={styles.tNote}>{t.notes}</Text> : null}
+          {wine.producer ? <Text style={styles.producer}>{wine.producer}</Text> : null}
+          <View style={styles.tags}>
+            <Badge label={varietiesText(wine)} fg={colors.gold} bg={colors.goldSoft} glyph="❧" />
+            <Badge label={regionText(wine)} fg={colors.textMuted} bg={colors.surfaceAlt} glyph="◎" />
+            {wine.vintage ? <Badge label={`빈티지 ${wine.vintage}`} fg={colors.textMuted} bg={colors.surfaceAlt} /> : null}
+          </View>
         </View>
-      ))}
 
-      <Pressable style={styles.btn} onPress={() => navigation.navigate('AddTasting', { wineId })}>
-        <Text style={styles.btnText}>＋ 이 와인 기록 추가</Text>
-      </Pressable>
-      <Pressable style={styles.deleteWine} onPress={confirmDeleteWine}>
-        <Text style={styles.deleteWineText}>이 와인 삭제</Text>
-      </Pressable>
-    </ScrollView>
+        {/* 현지 시세 카드 */}
+        <View style={styles.priceCard}>
+          <Text style={styles.overline}>현지 평균가</Text>
+          {wine.referencePrice ? (
+            <>
+              <Text style={styles.priceValue}>
+                {wine.referencePrice.avg.toLocaleString()}
+                <Text style={styles.priceCurrency}> {wine.referencePrice.currency}</Text>
+              </Text>
+              <Text style={styles.priceSource}>출처 · {wine.referencePrice.source}</Text>
+            </>
+          ) : (
+            <Text style={styles.priceMuted}>아직 시세를 조회하지 않았어요</Text>
+          )}
+          <Pressable
+            style={[styles.lookupBtn, looking && styles.lookupBtnDisabled]}
+            onPress={lookupPriceNow}
+            disabled={looking}
+          >
+            <Text style={styles.lookupText}>
+              {looking ? '조회 중…' : wine.referencePrice ? '시세 다시 조회' : '현지 시세 조회'}
+            </Text>
+          </Pressable>
+        </View>
+
+        {/* 시음 기록 */}
+        <View style={styles.sectionHead}>
+          <Text style={styles.section}>시음 기록</Text>
+          <Text style={styles.sectionCount}>{tastings.length}</Text>
+        </View>
+
+        {tastings.length === 0 ? (
+          <Text style={styles.priceMuted}>아직 이 와인의 기록이 없어요.</Text>
+        ) : (
+          tastings.map((t) => {
+            const tone = verdictTone(t.priceVerdict);
+            return (
+              <View key={t.id} style={styles.tasting}>
+                <View style={styles.tTop}>
+                  <Text style={styles.tDate}>{formatDate(t.tastedAt)}</Text>
+                  <View style={styles.tActions}>
+                    <Pressable hitSlop={8} onPress={() => navigation.navigate('AddTasting', { wineId, tastingId: t.id })}>
+                      <Text style={styles.tEdit}>수정</Text>
+                    </Pressable>
+                    <Pressable hitSlop={8} onPress={() => confirmDeleteTasting(t.id)}>
+                      <Text style={styles.tDelete}>삭제</Text>
+                    </Pressable>
+                  </View>
+                </View>
+                <View style={styles.tPriceRow}>
+                  <Text style={styles.tPrice}>
+                    {t.pricePaid.toLocaleString()} {t.currency}
+                    <Text style={styles.tType}>  ·  {t.purchaseType === 'restaurant' ? '식당' : '소매'}</Text>
+                  </Text>
+                  <Badge label={verdictLabel(t.priceVerdict)} fg={tone.fg} bg={tone.bg} glyph={tone.glyph} />
+                </View>
+                {t.foodPairing ? (
+                  <Text style={styles.tLine}>🍽  {t.foodPairing} · 페어링 {pairingLabel(t.pairingRating)}</Text>
+                ) : null}
+                {t.tasteRating != null ? (
+                  <View style={styles.tRatings}>
+                    <Text style={styles.tRatingLabel}>맛</Text>
+                    <StarRating value={t.tasteRating} size={14} />
+                    <Text style={styles.tRatingLabel}>  가성비</Text>
+                    <StarRating value={t.valueRating} size={14} color={colors.cheap} />
+                  </View>
+                ) : null}
+                {t.notes ? <Text style={styles.tNote}>“{t.notes}”</Text> : null}
+              </View>
+            );
+          })
+        )}
+
+        <PrimaryButton
+          label="＋  이 와인 기록 추가"
+          onPress={() => navigation.navigate('AddTasting', { wineId })}
+          style={styles.addBtn}
+        />
+        <Pressable style={styles.deleteWine} onPress={confirmDeleteWine}>
+          <Text style={styles.deleteWineText}>이 와인 삭제</Text>
+        </Pressable>
+      </ScrollView>
+    </ScreenBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  content: { padding: 20, gap: 6 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  label_image: { width: '100%', height: 200, borderRadius: 12, marginBottom: 10, backgroundColor: '#eee' },
-  name: { fontSize: 22, fontWeight: '800', color: '#3d1422' },
-  sub: { fontSize: 15, color: '#7b2d44' },
-  meta: { fontSize: 14, color: '#444' },
-  metaMuted: { fontSize: 14, color: '#aaa' },
-  lookupBtn: { marginTop: 8, alignSelf: 'flex-start', backgroundColor: '#efe3e8', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 16 },
+  content: { padding: spacing(5), paddingBottom: spacing(12), gap: spacing(4) },
+  center: { alignItems: 'center', justifyContent: 'center' },
+  loading: { ...font.body, color: colors.textMuted },
+
+  labelImage: { width: '100%', height: 220, borderRadius: radius.lg, backgroundColor: colors.surface },
+
+  hero: { gap: spacing(2) },
+  heroHead: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing(3) },
+  name: { ...font.display, color: colors.text, flex: 1 },
+  editWine: { ...font.caption, color: colors.gold, paddingTop: 6 },
+  producer: { ...font.heading, color: colors.gold, marginTop: -2 },
+  tags: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2), marginTop: spacing(1) },
+
+  priceCard: {
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+    padding: spacing(5),
+    gap: 4,
+    ...shadow.card,
+  },
+  overline: { ...font.overline, color: colors.textFaint, textTransform: 'uppercase' },
+  priceValue: { ...font.display, color: colors.text, marginTop: 2 },
+  priceCurrency: { ...font.heading, color: colors.textMuted },
+  priceSource: { ...font.caption, color: colors.textFaint },
+  priceMuted: { ...font.body, color: colors.textFaint },
+  lookupBtn: {
+    alignSelf: 'flex-start',
+    marginTop: spacing(3),
+    backgroundColor: colors.primarySoft,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    paddingVertical: 9,
+    paddingHorizontal: 16,
+    borderRadius: radius.pill,
+  },
   lookupBtnDisabled: { opacity: 0.5 },
-  lookupText: { color: '#7b2d44', fontWeight: '700', fontSize: 13 },
-  editWine: { marginTop: 6, alignSelf: 'flex-start', paddingVertical: 4 },
-  editWineText: { color: '#7b2d44', fontWeight: '700', fontSize: 13 },
-  section: { marginTop: 18, fontSize: 16, fontWeight: '700', color: '#3d1422' },
-  tasting: { marginTop: 10, padding: 12, borderRadius: 10, backgroundColor: '#f5f0f2', gap: 3 },
-  tHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  tActions: { flexDirection: 'row', gap: 14 },
-  tEdit: { fontSize: 12, color: '#7b2d44', fontWeight: '700' },
-  tDelete: { fontSize: 12, color: '#b0457a', fontWeight: '700' },
-  tDate: { fontSize: 12, color: '#888' },
-  tLine: { fontSize: 14, color: '#333' },
-  tNote: { fontSize: 13, color: '#666', fontStyle: 'italic' },
-  btn: { marginTop: 22, backgroundColor: '#7b2d44', paddingVertical: 13, borderRadius: 24, alignItems: 'center' },
-  btnText: { color: '#fff', fontWeight: '700' },
-  deleteWine: { marginTop: 12, marginBottom: 30, paddingVertical: 12, alignItems: 'center' },
-  deleteWineText: { color: '#b0457a', fontWeight: '700' },
+  lookupText: { ...font.caption, color: colors.primaryBright },
+
+  sectionHead: { flexDirection: 'row', alignItems: 'center', gap: spacing(2), marginTop: spacing(2) },
+  section: { ...font.heading, color: colors.text },
+  sectionCount: {
+    ...font.caption,
+    color: colors.primaryBright,
+    backgroundColor: colors.primarySoft,
+    paddingHorizontal: 9,
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+    overflow: 'hidden',
+  },
+
+  tasting: {
+    borderRadius: radius.md,
+    backgroundColor: colors.bgElevated,
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+    padding: spacing(4),
+    gap: 6,
+  },
+  tTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  tDate: { ...font.caption, color: colors.textFaint },
+  tActions: { flexDirection: 'row', gap: spacing(4) },
+  tEdit: { ...font.caption, color: colors.gold },
+  tDelete: { ...font.caption, color: colors.expensive },
+  tPriceRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing(2) },
+  tPrice: { ...font.bodyStrong, color: colors.text, flexShrink: 1 },
+  tType: { ...font.body, color: colors.textMuted },
+  tLine: { ...font.body, color: colors.textMuted },
+  tRatings: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  tRatingLabel: { ...font.caption, color: colors.textFaint },
+  tNote: { ...font.body, color: colors.textMuted, fontStyle: 'italic', marginTop: 2 },
+
+  addBtn: { marginTop: spacing(3) },
+  deleteWine: { alignItems: 'center', paddingVertical: spacing(3) },
+  deleteWineText: { ...font.caption, color: colors.expensive },
 });
