@@ -110,6 +110,19 @@ export async function insertWine(wine: Wine): Promise<void> {
   );
 }
 
+/** 조회된 현지 시세를 와인에 반영(시세 조회 후). */
+export async function updateWineReferencePrice(
+  wineId: string,
+  ref: Wine['referencePrice'],
+): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    'UPDATE wines SET reference_json = ? WHERE id = ?',
+    ref ? JSON.stringify(ref) : null,
+    wineId,
+  );
+}
+
 export async function getWine(id: string): Promise<Wine | null> {
   const db = await getDb();
   const row = await db.getFirstAsync<WineRow>('SELECT * FROM wines WHERE id = ?', id);

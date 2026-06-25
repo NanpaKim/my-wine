@@ -27,21 +27,99 @@ export interface PriceProvider {
   fetch(query: PriceQuery): Promise<ReferencePrice | null>;
 }
 
-/** 1순위: Wine-Searcher 무료 API. 키 연동 전까지 스텁. */
+// ── Wine-Searcher (1순위) ──────────────────────────────────────────────
+// 키는 빌드 환경변수로 주입한다(Expo: EXPO_PUBLIC_* 는 클라이언트에 인라인됨).
+// 무료 키는 wine-searcher.com/trade 에서 신청한다. 키가 없으면 이 공급자는
+// 조용히 null 을 반환해 다음 폴백으로 넘어간다.
+const WS_KEY = process.env.EXPO_PUBLIC_WINE_SEARCHER_KEY;
+// 엔드포인트 경로는 키 발급 시 안내받는 값으로 덮어쓸 수 있게 환경변수로 둔다.
+const WS_URL =
+  process.env.EXPO_PUBLIC_WINE_SEARCHER_URL ?? 'https://api.wine-searcher.com/wine-select';
+
+/** 요청 URL 구성(순수 함수, 테스트 가능). */
+export function buildWineSearcherUrl(query: PriceQuery, key: string, base = WS_URL): string {
+  const p = new URLSearchParams({ api_key: key, winename: query.name, format: 'json' });
+  if (query.vintage) p.set('vintage', String(query.vintage));
+  if (query.preferredCurrency) p.set('currencycode', query.preferredCurrency);
+  return `${base}?${p.toString()}`;
+}
+
+function pickNum(node: any, keys: string[]): number | null {
+  for (const k of keys) {
+    const raw = node?.[k];
+    const n = typeof raw === 'string' ? Number(raw.replace(/[^0-9.]/g, '')) : raw;
+    if (typeof n === 'number' && Number.isFinite(n) && n > 0) return n;
+  }
+  return null;
+}
+
+/**
+ * Wine-Searcher 응답 → ReferencePrice (순수 함수, 테스트 가능).
+ * 검증된 필드: price-average / price-min / price-max (750ml, ex-tax).
+ * 응답 래핑/표기 차이에 견디도록 흔한 키 변형도 함께 본다. avg 가 없으면 null.
+ */
+export function parseWineSearcherResponse(
+  data: any,
+  requestedCurrency: string,
+): ReferencePrice | null {
+  const w = data?.['wine-searcher'] ?? data?.wine ?? data?.result ?? data;
+  const node = Array.isArray(w) ? w[0] : w;
+  if (!node || typeof node !== 'object') return null;
+
+  const avg = pickNum(node, ['price-average', 'price_average', 'average_price', 'priceAverage']);
+  if (avg == null) return null;
+
+  return {
+    min: pickNum(node, ['price-min', 'price_min', 'min_price', 'priceMin']),
+    avg,
+    max: pickNum(node, ['price-max', 'price_max', 'max_price', 'priceMax']),
+    currency: node.currency ?? node['currency-code'] ?? requestedCurrency,
+    source: 'wine-searcher',
+    fetchedAt: new Date().toISOString(),
+  };
+}
+
 export const wineSearcherProvider: PriceProvider = {
   source: 'wine-searcher',
-  async fetch(_query: PriceQuery): Promise<ReferencePrice | null> {
-    // TODO: Wine-Searcher Wine Check API 연동 (min/avg/max 소매가). DESIGN.md §2.
-    return null;
+  async fetch(query: PriceQuery): Promise<ReferencePrice | null> {
+    if (!WS_KEY) return null; // 키 없으면 폴백으로
+    const res = await fetch(buildWineSearcherUrl(query, WS_KEY));
+    if (!res.ok) return null;
+    const data = await res.json();
+    return parseWineSearcherResponse(data, query.preferredCurrency ?? 'KRW');
   },
 };
 
-/** 2순위: Vivino 비공식 스크래핑(소형 백엔드 경유). 연동 전까지 스텁. */
+// ── Vivino (2순위) ────────────────────────────────────────────────────
+// 공식 API가 없어 비공식 엔드포인트 스크래핑이 필요한데, 이는 (a) 약관
+// 그레이존, (b) 사이트 변경에 취약, (c) 클라이언트 직접 호출 시 차단·IP 제한이
+// 잦다 — 안정적으로 하려면 별도 백엔드가 필요하다(DESIGN.md §6). 추측 스키마로
+// 깨지기 쉬운 코드를 넣지 않고, 백엔드 프록시가 준비되면 그 URL을 환경변수로
+// 받아 연동하는 형태로 남겨둔다. 그전까지는 null(폴백).
+const VIVINO_PROXY_URL = process.env.EXPO_PUBLIC_VIVINO_PROXY_URL;
+
 export const vivinoProvider: PriceProvider = {
   source: 'vivino',
-  async fetch(_query: PriceQuery): Promise<ReferencePrice | null> {
-    // TODO: Vivino 스크래핑 백엔드 연동. DESIGN.md §2, §6.
-    return null;
+  async fetch(query: PriceQuery): Promise<ReferencePrice | null> {
+    if (!VIVINO_PROXY_URL) return null; // 백엔드 프록시 없으면 패스
+    try {
+      const url = `${VIVINO_PROXY_URL}?q=${encodeURIComponent(query.name)}`;
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const data: any = await res.json();
+      const avg = pickNum(data, ['avg', 'price', 'average']);
+      if (avg == null) return null;
+      return {
+        min: pickNum(data, ['min']),
+        avg,
+        max: pickNum(data, ['max']),
+        currency: data.currency ?? query.preferredCurrency ?? 'KRW',
+        source: 'vivino',
+        fetchedAt: new Date().toISOString(),
+      };
+    } catch {
+      return null;
+    }
   },
 };
 

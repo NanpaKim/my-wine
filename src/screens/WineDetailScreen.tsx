@@ -5,9 +5,11 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { RootStackParamList } from '../navigation/types';
-import { getWine, listTastingsForWine } from '../db/repo';
+import { getWine, listTastingsForWine, updateWineReferencePrice } from '../db/repo';
+import { lookupPrice } from '../services/priceLookup';
+import { getDeviceCurrency } from '../services/locale';
 import type { Tasting, Wine } from '../types/wine';
 import { pairingLabel, verdictLabel } from '../ui/verdict';
 
@@ -29,6 +31,30 @@ export default function WineDetailScreen({ route, navigation }: Props) {
   const { wineId } = route.params;
   const [wine, setWine] = useState<Wine | null>(null);
   const [tastings, setTastings] = useState<Tasting[]>([]);
+  const [looking, setLooking] = useState(false);
+
+  async function lookupPriceNow() {
+    if (!wine || looking) return;
+    setLooking(true);
+    try {
+      const ref = await lookupPrice({
+        name: wine.name,
+        producer: wine.producer,
+        vintage: wine.vintage,
+        preferredCurrency: getDeviceCurrency(),
+      });
+      if (ref) {
+        await updateWineReferencePrice(wine.id, ref);
+        setWine({ ...wine, referencePrice: ref });
+      } else {
+        Alert.alert('시세를 못 찾았어요', '직접 가격을 기록하면 적정가는 그 값으로 판단해요.');
+      }
+    } catch {
+      Alert.alert('시세 조회 실패', '잠시 후 다시 시도해 주세요.');
+    } finally {
+      setLooking(false);
+    }
+  }
 
   useFocusEffect(
     useCallback(() => {
@@ -57,6 +83,15 @@ export default function WineDetailScreen({ route, navigation }: Props) {
       ) : (
         <Text style={styles.metaMuted}>현지 시세 미조회</Text>
       )}
+      <Pressable
+        style={[styles.lookupBtn, looking && styles.lookupBtnDisabled]}
+        onPress={lookupPriceNow}
+        disabled={looking}
+      >
+        <Text style={styles.lookupText}>
+          {looking ? '조회 중…' : wine.referencePrice ? '시세 다시 조회' : '현지 시세 조회'}
+        </Text>
+      </Pressable>
 
       <Text style={styles.section}>시음 기록 ({tastings.length})</Text>
       {tastings.map((t) => (
@@ -87,6 +122,9 @@ const styles = StyleSheet.create({
   sub: { fontSize: 15, color: '#7b2d44' },
   meta: { fontSize: 14, color: '#444' },
   metaMuted: { fontSize: 14, color: '#aaa' },
+  lookupBtn: { marginTop: 8, alignSelf: 'flex-start', backgroundColor: '#efe3e8', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 16 },
+  lookupBtnDisabled: { opacity: 0.5 },
+  lookupText: { color: '#7b2d44', fontWeight: '700', fontSize: 13 },
   section: { marginTop: 18, fontSize: 16, fontWeight: '700', color: '#3d1422' },
   tasting: { marginTop: 10, padding: 12, borderRadius: 10, backgroundColor: '#f5f0f2', gap: 3 },
   tDate: { fontSize: 12, color: '#888' },
