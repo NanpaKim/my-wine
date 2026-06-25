@@ -5,7 +5,7 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { RootStackParamList } from '../navigation/types';
 import { getWine, listTastingsForWine, updateWineReferencePrice } from '../db/repo';
 import { lookupPrice } from '../services/priceLookup';
@@ -70,6 +70,9 @@ export default function WineDetailScreen({ route, navigation }: Props) {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      {wine.labelImageUri ? (
+        <Image source={{ uri: wine.labelImageUri }} style={styles.label_image} resizeMode="cover" />
+      ) : null}
       <Text style={styles.name}>{wine.name}</Text>
       {wine.producer ? <Text style={styles.sub}>{wine.producer}</Text> : null}
       <Text style={styles.meta}>{varietiesText(wine)}</Text>
@@ -118,6 +121,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
   content: { padding: 20, gap: 6 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  label_image: { width: '100%', height: 200, borderRadius: 12, marginBottom: 10, backgroundColor: '#eee' },
   name: { fontSize: 22, fontWeight: '800', color: '#3d1422' },
   sub: { fontSize: 15, color: '#7b2d44' },
   meta: { fontSize: 14, color: '#444' },
