@@ -30,7 +30,8 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
+# local env files (Google Cloud Vision API 키 등 — 커밋 금지)
+.env
 .env*.local
 
 # typescript
