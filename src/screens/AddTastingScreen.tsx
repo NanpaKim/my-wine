@@ -12,6 +12,8 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import type { RootStackParamList } from '../navigation/types';
 import { getWine, insertTasting, newId } from '../db/repo';
 import { judgePrice } from '../logic/priceVerdict';
+import { getFxRate } from '../services/fx';
+import { getDeviceCurrency } from '../services/locale';
 import type { PurchaseType, Rating3, Tasting, Wine } from '../types/wine';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AddTasting'>;
@@ -44,16 +46,21 @@ export default function AddTastingScreen({ route, navigation }: Props) {
     const pricePaid = Number(price);
     if (!Number.isFinite(pricePaid) || pricePaid <= 0) return;
 
-    // 통화를 명시적으로 넘긴다. 현재는 결제 통화 입력 UI가 없어 시세 통화와
-    // 같다고 가정한다(그래서 항상 환산 불필요). TODO: 결제 통화 선택 UI가 생기면
-    // paidCurrency 를 그 값으로 바꾸고, 다르면 fxRate(환율)를 함께 전달할 것.
-    const refCurrency = wine?.referencePrice?.currency ?? 'KRW';
+    // 통화는 자동 처리(입력 없음): 결제 통화는 기기 로케일에서, 환율은 무료
+    // API 에서 자동 조회. 시세 통화와 결제 통화가 같으면 환산 불필요.
+    const paidCurrency = getDeviceCurrency();
+    const refCurrency = wine?.referencePrice?.currency ?? null;
+    let fxRate: number | null = null;
+    if (refCurrency && refCurrency !== paidCurrency) {
+      fxRate = await getFxRate(refCurrency, paidCurrency).catch(() => null);
+    }
     const { verdict } = judgePrice({
       purchaseType,
       pricePaid,
-      paidCurrency: refCurrency,
+      paidCurrency,
       referenceAvg: wine?.referencePrice?.avg ?? null,
-      referenceCurrency: wine?.referencePrice?.currency ?? null,
+      referenceCurrency: refCurrency,
+      fxRate,
     });
 
     const t: Tasting = {
@@ -62,7 +69,7 @@ export default function AddTastingScreen({ route, navigation }: Props) {
       tastedAt: new Date(`${date}T12:00:00`).toISOString(),
       purchaseType,
       pricePaid,
-      currency: wine?.referencePrice?.currency ?? 'KRW',
+      currency: paidCurrency, // 실제 결제 통화(기기 로케일)
       foodPairing: food.trim() || null,
       pairingRating: pairing,
       tasteRating: taste ? Number(taste) : null,
