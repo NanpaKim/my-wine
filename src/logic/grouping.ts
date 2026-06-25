@@ -7,6 +7,9 @@ import type { Wine } from '../types/wine';
 
 export type GroupMode = 'region' | 'variety';
 
+/** 정렬: 이름 가나다/ABC순 | 최근 추가순. */
+export type SortMode = 'name' | 'recent';
+
 export interface WineSection {
   title: string;
   data: Wine[];
@@ -23,7 +26,12 @@ export function regionKey(w: Wine): string {
   return [c, r].filter(Boolean).join(' › ');
 }
 
-export function groupWines(wines: Wine[], mode: GroupMode): WineSection[] {
+/**
+ * 와인을 mode(지역/품종)로 묶고 sort 로 정렬한다.
+ * - 'name': 가나다/ABC순(섹션·항목 모두). '미상' 그룹은 맨 뒤.
+ * - 'recent': 최근 추가순(createdAt 내림차순). 섹션은 가장 최근 항목 기준.
+ */
+export function groupWines(wines: Wine[], mode: GroupMode, sort: SortMode = 'name'): WineSection[] {
   const map = new Map<string, Wine[]>();
   const add = (key: string, w: Wine) => {
     const arr = map.get(key);
@@ -41,11 +49,21 @@ export function groupWines(wines: Wine[], mode: GroupMode): WineSection[] {
     }
   }
 
+  const byRecent = (a: Wine, b: Wine) => b.createdAt.localeCompare(a.createdAt); // ISO 내림차순
+  const byName = (a: Wine, b: Wine) => a.name.localeCompare(b.name, 'ko');
+  for (const arr of map.values()) arr.sort(sort === 'recent' ? byRecent : byName);
+
   const unknown = mode === 'region' ? UNKNOWN_REGION : UNKNOWN_VARIETY;
-  const titles = [...map.keys()].sort((a, b) => {
-    if (a === unknown) return 1; // 미상은 맨 뒤
-    if (b === unknown) return -1;
-    return a.localeCompare(b, 'ko');
-  });
+  const titles = [...map.keys()];
+  if (sort === 'recent') {
+    // 섹션 순서 = 그 섹션의 가장 최근 항목(첫 항목이 이미 최신) 기준 내림차순.
+    titles.sort((a, b) => map.get(b)![0].createdAt.localeCompare(map.get(a)![0].createdAt));
+  } else {
+    titles.sort((a, b) => {
+      if (a === unknown) return 1; // 미상은 맨 뒤
+      if (b === unknown) return -1;
+      return a.localeCompare(b, 'ko');
+    });
+  }
   return titles.map((title) => ({ title, data: map.get(title)! }));
 }

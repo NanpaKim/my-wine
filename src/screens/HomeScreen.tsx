@@ -10,7 +10,7 @@ import { Alert, Pressable, SectionList, StyleSheet, Text, View } from 'react-nat
 import type { RootStackParamList } from '../navigation/types';
 import { deleteWine, listWines } from '../db/repo';
 import { deleteLabelPhoto } from '../services/photo';
-import { groupWines, type GroupMode } from '../logic/grouping';
+import { groupWines, type GroupMode, type SortMode } from '../logic/grouping';
 import type { Wine } from '../types/wine';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
@@ -23,6 +23,7 @@ function wineSubtitle(w: Wine): string {
 export default function HomeScreen({ navigation }: Props) {
   const [wines, setWines] = useState<Wine[]>([]);
   const [mode, setMode] = useState<GroupMode>('region');
+  const [sort, setSort] = useState<SortMode>('name');
 
   useFocusEffect(
     useCallback(() => {
@@ -50,7 +51,7 @@ export default function HomeScreen({ navigation }: Props) {
   }
 
   // 품종별 보기에선 같은 와인이 여러 섹션에 들어가므로 섹션별 고유 키로 감싼다.
-  const sections = groupWines(wines, mode).map((s) => ({
+  const sections = groupWines(wines, mode, sort).map((s) => ({
     title: s.title,
     data: s.data.map((wine) => ({ wine, key: `${s.title}::${wine.id}` })),
   }));
@@ -61,6 +62,13 @@ export default function HomeScreen({ navigation }: Props) {
         {(['region', 'variety'] as GroupMode[]).map((m) => (
           <Pressable key={m} style={[styles.tab, mode === m && styles.tabOn]} onPress={() => setMode(m)}>
             <Text style={[styles.tabText, mode === m && styles.tabTextOn]}>{m === 'region' ? '지역별' : '품종별'}</Text>
+          </Pressable>
+        ))}
+      </View>
+      <View style={styles.sortRow}>
+        {(['name', 'recent'] as SortMode[]).map((s) => (
+          <Pressable key={s} style={[styles.sortChip, sort === s && styles.sortChipOn]} onPress={() => setSort(s)}>
+            <Text style={[styles.sortText, sort === s && styles.sortTextOn]}>{s === 'name' ? '가나다순' : '최신순'}</Text>
           </Pressable>
         ))}
       </View>
@@ -106,6 +114,11 @@ const styles = StyleSheet.create({
   tabOn: { backgroundColor: '#7b2d44' },
   tabText: { color: '#7b2d44', fontWeight: '700' },
   tabTextOn: { color: '#fff' },
+  sortRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 12, paddingTop: 6 },
+  sortChip: { paddingVertical: 5, paddingHorizontal: 12, borderRadius: 14, borderWidth: 1, borderColor: '#d8c8ce' },
+  sortChipOn: { backgroundColor: '#efe6e9', borderColor: '#7b2d44' },
+  sortText: { color: '#9a6b78', fontWeight: '600', fontSize: 12 },
+  sortTextOn: { color: '#7b2d44' },
   list: { padding: 16, paddingTop: 8, gap: 8 },
   sectionHeader: { marginTop: 14, marginBottom: 2, fontSize: 13, fontWeight: '800', color: '#7b2d44' },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },

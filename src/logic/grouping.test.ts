@@ -44,6 +44,37 @@ describe('groupWines region', () => {
   });
 });
 
+describe('groupWines 정렬', () => {
+  it("name: 섹션 가나다순 + 미상 맨 뒤", () => {
+    const s = groupWines(
+      [
+        wine({ name: 'a', region: { country: '프랑스', region: null, subRegion: null } }),
+        wine({ name: 'b' }),
+        wine({ name: 'c', region: { country: '독일', region: null, subRegion: null } }),
+      ],
+      'region',
+      'name',
+    );
+    expect(s.map((x) => x.title)).toEqual(['독일', '프랑스', UNKNOWN_REGION]);
+  });
+
+  it('recent: 최근 추가 와인이 위, 섹션도 최신 항목 기준', () => {
+    const s = groupWines(
+      [
+        wine({ name: 'old', region: { country: '프랑스', region: null, subRegion: null }, createdAt: '2026-01-01' }),
+        wine({ name: 'newest', region: { country: '독일', region: null, subRegion: null }, createdAt: '2026-06-01' }),
+        wine({ name: 'mid', region: { country: '프랑스', region: null, subRegion: null }, createdAt: '2026-03-01' }),
+      ],
+      'region',
+      'recent',
+    );
+    // 독일(최신 6/1)이 프랑스(최신 3/1)보다 앞
+    expect(s.map((x) => x.title)).toEqual(['독일', '프랑스']);
+    // 프랑스 섹션 안에서도 최신(mid 3/1)이 old(1/1)보다 앞
+    expect(s[1].data.map((w) => w.name)).toEqual(['mid', 'old']);
+  });
+});
+
 describe('groupWines variety', () => {
   it('블렌드는 각 품종 그룹에 모두 들어가고, 없으면 미상', () => {
     const sections = groupWines(
