@@ -116,6 +116,19 @@ export async function getWine(id: string): Promise<Wine | null> {
   return row ? rowToWine(row) : null;
 }
 
+/** 와인의 현지 시세를 갱신한다(자동 조회 성공 또는 사용자 수동 입력 시 사용). */
+export async function updateWineReferencePrice(
+  wineId: string,
+  referencePrice: Wine['referencePrice'],
+): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    'UPDATE wines SET reference_json = ? WHERE id = ?',
+    referencePrice ? JSON.stringify(referencePrice) : null,
+    wineId,
+  );
+}
+
 export async function listWines(): Promise<Wine[]> {
   const db = await getDb();
   const rows = await db.getAllAsync<WineRow>('SELECT * FROM wines ORDER BY created_at DESC');

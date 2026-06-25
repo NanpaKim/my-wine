@@ -10,8 +10,9 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { RootStackParamList } from '../navigation/types';
-import { getWine, insertTasting, newId } from '../db/repo';
+import { getWine, insertTasting, newId, updateWineReferencePrice } from '../db/repo';
 import { judgePrice } from '../logic/priceVerdict';
+import { manualReferencePrice } from '../services/priceLookup';
 import type { PurchaseType, Rating3, Tasting, Wine } from '../types/wine';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AddTasting'>;
@@ -35,6 +36,9 @@ export default function AddTastingScreen({ route, navigation }: Props) {
   const [notes, setNotes] = useState('');
   // 기본 마신 날짜 = 오늘(YYYY-MM-DD). 실제 앱에선 사진 EXIF/날짜 선택기로 대체.
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  // 자동 시세 조회(Wine-Searcher/Vivino)가 아직 비어 있는 와인을 위한 수동 입력.
+  const [manualAvg, setManualAvg] = useState('');
+  const [currency, setCurrency] = useState('KRW');
 
   useEffect(() => {
     getWine(wineId).then(setWine).catch((e) => console.warn('getWine failed', e));
@@ -44,10 +48,19 @@ export default function AddTastingScreen({ route, navigation }: Props) {
     const pricePaid = Number(price);
     if (!Number.isFinite(pricePaid) || pricePaid <= 0) return;
 
+    let referencePrice = wine?.referencePrice ?? null;
+    if (!referencePrice && manualAvg.trim()) {
+      const avg = Number(manualAvg);
+      if (Number.isFinite(avg) && avg > 0) {
+        referencePrice = manualReferencePrice(avg, currency.trim() || 'KRW');
+        await updateWineReferencePrice(wineId, referencePrice);
+      }
+    }
+
     const { verdict } = judgePrice({
       purchaseType,
       pricePaid,
-      referenceAvg: wine?.referencePrice?.avg ?? null,
+      referenceAvg: referencePrice?.avg ?? null,
     });
 
     const t: Tasting = {
@@ -56,7 +69,7 @@ export default function AddTastingScreen({ route, navigation }: Props) {
       tastedAt: new Date(`${date}T12:00:00`).toISOString(),
       purchaseType,
       pricePaid,
-      currency: wine?.referencePrice?.currency ?? 'KRW',
+      currency: referencePrice?.currency ?? (currency.trim() || 'KRW'),
       foodPairing: food.trim() || null,
       pairingRating: pairing,
       tasteRating: taste ? Number(taste) : null,
@@ -88,6 +101,32 @@ export default function AddTastingScreen({ route, navigation }: Props) {
 
       <Text style={styles.label}>낸 가격</Text>
       <TextInput style={styles.input} value={price} onChangeText={setPrice} keyboardType="numeric" placeholder="예: 100000" />
+
+      {wine && !wine.referencePrice && (
+        <View style={styles.referenceBox}>
+          <Text style={styles.referenceHint}>
+            현지 시세가 아직 없어요. 알고 있다면 입력하면 적정가 판정에 바로 쓰입니다(모르면 비워두세요).
+          </Text>
+          <Text style={styles.label}>현지 평균 소매가</Text>
+          <View style={styles.row}>
+            <TextInput
+              style={[styles.input, styles.flex1]}
+              value={manualAvg}
+              onChangeText={setManualAvg}
+              keyboardType="numeric"
+              placeholder="예: 45000"
+            />
+            <TextInput
+              style={[styles.input, styles.currencyInput]}
+              value={currency}
+              onChangeText={setCurrency}
+              placeholder="KRW"
+              autoCapitalize="characters"
+              maxLength={3}
+            />
+          </View>
+        </View>
+      )}
 
       <Text style={styles.label}>마신 날짜</Text>
       <TextInput style={styles.input} value={date} onChangeText={setDate} placeholder="YYYY-MM-DD" />
@@ -127,6 +166,10 @@ const styles = StyleSheet.create({
   input: { borderWidth: 1, borderColor: '#d8c8ce', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15 },
   multiline: { minHeight: 70, textAlignVertical: 'top' },
   row: { flexDirection: 'row', gap: 8 },
+  flex1: { flex: 1 },
+  currencyInput: { width: 64, textAlign: 'center' },
+  referenceBox: { backgroundColor: '#f7eef1', borderRadius: 10, padding: 12, marginTop: 4 },
+  referenceHint: { fontSize: 12.5, color: '#7b2d44', marginBottom: 6 },
   chip: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 18, backgroundColor: '#efe6e9' },
   chipOn: { backgroundColor: '#7b2d44' },
   chipText: { color: '#7b2d44', fontWeight: '600' },
